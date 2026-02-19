@@ -1,4 +1,4 @@
-import uuid, asyncio, time
+import uuid, asyncio, time, os
 from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +9,8 @@ from infrastructure.uow import create_uow_provider, UnitOfWork
 from models import Message, ChatSession, Goal, GoalRelation, InterventionCandidate, InterventionSimulation, InterventionRiskScore, InterventionApproval
 from schemas import (
     MessageCreate, MessageResponse, ResumeRequest, EventRequest,
-    EIEInferenceRequest, MetaOutcome, EmotionalIntent
+    EIEInferenceRequest, MetaOutcome, EmotionalIntent,
+    BulkTransitionRequest, BulkTransitionResponse, FreezeTreeRequest
 )
 from tasks import run_chat_task, run_resume_task, run_cron_task
 from scheduler import start_scheduler
@@ -40,12 +41,15 @@ from api.admin.reflection import router as reflection_admin_router
 
 app = FastAPI()
 
-# Add CORS middleware
+# SECURITY: Limit CORS to specific origins
+# Get allowed origins from environment variable, fallback to localhost for development
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501,http://localhost:8000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=ALLOWED_ORIGINS,  # Only whitelisted origins
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
 )
 
@@ -626,6 +630,97 @@ async def get_orphan_goals(limit: int = 5):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/goals/bulk-transition")
+async def bulk_transition_goals(
+    request: BulkTransitionRequest,
+    uow: UnitOfWork = Depends(get_uow)
+):
+    """
+    POST /goals/bulk-transition - Mass transition of multiple goals
+    
+    UoW MIGRATION: All transitions happen in ONE transaction.
+    Either all succeed or all roll back.
+    
+    Features:
+    - O(1) transactions instead of O(N)
+    - Pessimistic locking for consistency
+    - Atomic rollback on any error
+    
+    Limits:
+    - Max 1000 goals per request
+    - Valid states: pending, active, done, frozen, archived
+    """
+    from infrastructure.uow import bulk_transition_service
+    from uuid import UUID
+    
+    try:
+        # Convert string IDs to UUIDs
+        goal_uuids = []
+        for gid in request.goal_ids:
+            try:
+                goal_uuids.append(UUID(gid))
+            except ValueError:
+                return {
+                    "status": "error",
+                    "error": f"Invalid goal ID format: {gid}"
+                }
+        
+        # Execute bulk transition
+        result = await bulk_transition_service.execute_bulk(
+            uow=uow,
+            goal_ids=goal_uuids,
+            new_state=request.new_state,
+            reason=request.reason,
+            actor=request.actor
+        )
+        
+        return {
+            "status": "ok",
+            **result
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/goals/freeze-tree")
+async def freeze_goal_tree(
+    request: FreezeTreeRequest,
+    uow: UnitOfWork = Depends(get_uow)
+):
+    """
+    POST /goals/freeze-tree - Freeze entire goal tree (root + all descendants)
+    
+    Useful for:
+    - Pausing large projects
+    - Mass archiving
+    - Cascade operations
+    
+    All goals in the tree are frozen in ONE transaction.
+    """
+    from infrastructure.uow import bulk_transition_service
+    
+    try:
+        result = await bulk_transition_service.freeze_tree(
+            uow=uow,
+            root_goal_id=request.root_goal_id,
+            reason=request.reason,
+            actor=request.actor
+        )
+        
+        return {
+            "status": "ok",
+            **result
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/goals/{goal_id}/bind-context")
 async def bind_goal_context(goal_id: str, context: dict):
     """
@@ -729,13 +824,16 @@ async def mutate_goal_endpoint(goal_id: str, mutation_data: dict, uow: UnitOfWor
     mutation_type = mutation_data.get("mutation_type")
     reason = mutation_data.get("reason", "No reason provided")
 
+    # Remove duplicate keys from mutation_data
+    mutation_params = {k: v for k, v in mutation_data.items() if k not in ["mutation_type", "reason"]}
+
     try:
         result = await goal_mutator.mutate_goal_with_uow(
             uow=uow,
             goal_id=goal_id,
             mutation_type=mutation_type,
             reason=reason,
-            **mutation_data
+            **mutation_params
         )
 
         return {
@@ -908,6 +1006,54 @@ async def extract_goal_patterns(goal_id: str, reflection: dict):
     return {
         "status": "ok",
         "pattern": pattern
+    }
+
+
+@app.post("/patterns/cleanup")
+async def cleanup_old_patterns(days: int = 30):
+    """
+    Cleanup old patterns with low confidence.
+    
+    Args:
+        days: Delete patterns older than N days (default: 30)
+    
+    Returns:
+        Number of deleted patterns
+    """
+    from semantic_memory import semantic_memory
+    
+    deleted_count = await semantic_memory.cleanup_old_patterns(days=days)
+    
+    return {
+        "status": "ok",
+        "deleted_count": deleted_count,
+        "days_threshold": days
+    }
+
+
+@app.post("/patterns/search-vector")
+async def search_patterns_vector(query: str, limit: int = 5):
+    """
+    Search patterns using Milvus vector similarity.
+    
+    Args:
+        query: Search query text
+        limit: Maximum results
+    
+    Returns:
+        Similar patterns
+    """
+    from semantic_memory import semantic_memory
+    
+    patterns = await semantic_memory.retrieve_similar_patterns_vector(
+        query_text=query,
+        limit=limit
+    )
+    
+    return {
+        "status": "ok",
+        "query": query,
+        "patterns": patterns
     }
 
 

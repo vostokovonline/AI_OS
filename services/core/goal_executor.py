@@ -6,7 +6,10 @@ GOAL EXECUTOR - Система для достижения сложных цел
 Author: AI-OS Core Team
 Date: 2026-02-12
 """
-import os, asyncio, httpx, uuid
+import os
+import asyncio
+import httpx
+import uuid
 from uuid import UUID
 from datetime import datetime
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -18,6 +21,11 @@ from telemetry import log_action
 import json
 
 from infrastructure.uow import UnitOfWork, create_uow_provider
+
+# NEW: Centralized logging
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 TELEGRAM_URL = os.getenv("TELEGRAM_URL", "http://telegram:8004")
@@ -132,7 +140,11 @@ class GoalExecutor:
             else:
                 calculated_depth_level = 0
 
-        print(f"🎯 Final depth_level for goal '{title}': {calculated_depth_level}")
+        logger.info(
+            "goal_depth_calculated",
+            goal_title=title,
+            depth_level=calculated_depth_level
+        )
 
         # GOAL CONTRACT v3.0
         goal_contract = goal_contract_validator.create_default_contract(
@@ -206,12 +218,20 @@ class GoalExecutor:
             # GOAL CONTRACT CHECK v3.0
             can_execute, reason = goal_contract_validator.can_execute_action(goal, "execute")
             if not can_execute:
-                print(f"⛔ Execution forbidden: {reason}")
+                logger.warning(
+                    "goal_execution_forbidden",
+                    goal_id=goal_id,
+                    reason=reason
+                )
                 return {"status": "error", "message": f"Execution forbidden: {reason}"}
 
             # DELEGATE TO GOAL EXECUTOR V2 FOR ATOMIC GOALS
             if goal.is_atomic:
-                print(f"⚡ Delegating atomic goal to GoalExecutorV2: {goal.title}")
+                logger.info(
+                    "delegating_to_v2",
+                    goal_id=goal_id,
+                    goal_title=goal.title
+                )
                 from goal_executor_v2 import goal_executor_v2
                 return await goal_executor_v2.execute_goal_with_uow(
                     uow, goal_id, session_id
@@ -257,10 +277,17 @@ class GoalExecutor:
                     system_state=None
                 )
 
-                print(f"✅ Personality-aware bias computed:")
-                print(f"   - Tone: {personality_bias.tone}")
+                logger.info(
+                    "personality_bias_computed",
+                    goal_id=goal_id,
+                    tone=personality_bias.tone if personality_bias else None
+                )
         except Exception as e:
-            print(f"⚠️ Failed to compute personality bias: {e}")
+            logger.warning(
+                "personality_bias_failed",
+                goal_id=goal_id,
+                error=str(e)
+            )
 
         # Agent Graph Execution (вне транзакции - это long-running)
         execution_prompt = f"""GOAL: {goal.title}
@@ -292,15 +319,34 @@ goal_executor = GoalExecutor()
 from celery_config import celery_app
 
 
+# NEW: Proper async execution without asyncio.run()
+def _run_async(coro):
+    """
+    Run async coroutine in existing event loop.
+    Replaces asyncio.run() which creates new loop each time.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, coro)
+                return future.result()
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
 @celery_app.task(bind=True)
 def execute_goal_task(self, goal_id: str, session_id: str = None):
     """Фоновая задача для выполнения цели"""
-    result = asyncio.run(goal_executor.execute_goal(goal_id, session_id))
+    result = _run_async(goal_executor.execute_goal(goal_id, session_id))
     return result
 
 
 @celery_app.task(bind=True)
 def execute_complex_goal_task(self, user_request: str):
     """Фоновая задача для выполнения сложной цели из естественного языка"""
-    result = asyncio.run(goal_executor.execute_complex_goal(user_request))
+    result = _run_async(goal_executor.execute_complex_goal(user_request))
     return result

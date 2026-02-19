@@ -17,6 +17,11 @@ from goal_contract_validator import goal_contract_validator
 # UoW imports для новой архитектуры
 from infrastructure.uow import UnitOfWork, GoalRepository
 
+# Centralized logging
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 TELEGRAM_URL = os.getenv("TELEGRAM_URL", "http://telegram:8004")
 
@@ -110,7 +115,7 @@ class GoalDecomposer:
             return classification
 
         except Exception as e:
-            print(f"❌ Classification error: {e}")
+            logger.error("classification_failed", error=str(e))
             return {
                 "goal_type": "achievable",
                 "reasoning": "Ошибка классификации, по умолчанию achievable",
@@ -156,7 +161,7 @@ class GoalDecomposer:
             return data.get("domains", [])
 
         except Exception as e:
-            print(f"❌ Domain analysis error: {e}")
+            logger.error("domain_analysis_failed", error=str(e))
             return ["general"]
 
     async def decompose_goal(self, goal_id: str, max_depth: int = 3) -> List[Dict]:
@@ -199,14 +204,14 @@ class GoalDecomposer:
 
             # Apply modifiers
             max_depth = modifiers.max_depth
-            print(f"🧠 [EIE v2] Adjusted max_depth to {max_depth} (pace={modifiers.pace}, style={modifiers.style})")
+            logger.debug("max_depth_adjusted", max_depth=max_depth, pace=modifiers.pace, style=modifiers.style)
 
             if modifiers.safety_override:
-                print(f"🔒 [EIE v2] SAFETY OVERRIDE ACTIVE - recovery_mode={modifiers.recovery_mode}")
+                logger.warning("safety_override_active", recovery_mode=modifiers.recovery_mode)
 
         except Exception as e:
             # If EIE v2 fails, continue with original max_depth
-            print(f"⚠️  EIE v2 error in decomposer (continuing): {e}")
+            logger.warning("decomposer_error_continuing", error=str(e))
 
         async with AsyncSessionLocal() as db:
             # Re-fetch goal since we might have used the session above
@@ -220,7 +225,7 @@ class GoalDecomposer:
             # 🔑 GOAL CONTRACT CHECK v3.0 - Проверяем разрешено ли декомпозировать
             can_decompose, reason = goal_contract_validator.can_execute_action(goal, "decompose")
             if not can_decompose:
-                print(f"⛔ Decomposition forbidden: {reason}")
+                logger.warning("decomposition_forbidden", reason=reason)
                 return []
 
             # Если цель атомарная - не декомпозируем
@@ -230,7 +235,7 @@ class GoalDecomposer:
             # 🔑 GOAL CONTRACT CHECK v3.0 - Проверяем лимит глубины
             can_proceed, reason = goal_contract_validator.check_depth_limit(goal, goal.depth_level)
             if not can_proceed:
-                print(f"⛔ Depth limit reached: {reason}")
+                logger.warning("depth_limit_reached", reason=reason)
                 goal.is_atomic = True
                 await db.commit()
                 return []
@@ -248,7 +253,7 @@ class GoalDecomposer:
 
             can_proceed, reason = goal_contract_validator.check_subgoals_limit(goal, current_subgoals_count)
             if not can_proceed:
-                print(f"⛔ Subgoals limit reached: {reason}")
+                logger.warning("subgoals_limit_reached", reason=reason)
                 return []
 
             # Генерируем подцели
@@ -260,7 +265,7 @@ class GoalDecomposer:
                 current_subgoals_count + len(subgoals)
             )
             if not can_proceed:
-                print(f"⛔ Would exceed subgoals limit: {reason}")
+                logger.warning("would_exceed_subgoals_limit", reason=reason)
                 # Обрезаем до лимита
                 if goal.goal_contract:
                     max_subgoals = goal.goal_contract.get("max_subgoals", 100)
@@ -315,13 +320,13 @@ class GoalDecomposer:
                     )
 
                     if transition_result["result"] != "success":
-                        print(f"⚠️  Transition to active failed: {transition_result}")
+                        logger.error("transition_to_active_failed", result=transition_result)
                         return created_subgoals
 
                     goal.progress = 0.0
                     goal.status = "active"
 
-                print(f"✅ Parent goal '{goal.title}' → active (created {len(created_subgoals)} subgoals)")
+                logger.info("parent_goal_activated", goal_title=goal.title, subgoals_count=len(created_subgoals))
 
             # Отправляем уведомление
             await self._send_decomposition_notification(goal, created_subgoals)
@@ -358,13 +363,13 @@ class GoalDecomposer:
         goal = await repo.get_for_update(uow.session, goal_uuid)
         
         if not goal:
-            print(f"❌ Goal {goal_id} not found")
+            logger.error("goal_not_found", goal_id=goal_id)
             return []
         
         # 2. GOAL CONTRACT CHECK v3.0 - Проверяем разрешено ли декомпозировать
         can_decompose, reason = goal_contract_validator.can_execute_action(goal, "decompose")
         if not can_decompose:
-            print(f"⛔ Decomposition forbidden: {reason}")
+            logger.warning("decomposition_forbidden", reason=reason)
             return []
         
         # Если цель атомарная - не декомпозируем
@@ -374,7 +379,7 @@ class GoalDecomposer:
         # 3. GOAL CONTRACT CHECK v3.0 - Проверяем лимит глубины
         can_proceed, reason = goal_contract_validator.check_depth_limit(goal, goal.depth_level)
         if not can_proceed:
-            print(f"⛔ Depth limit reached: {reason}")
+            logger.warning("depth_limit_reached", reason=reason)
             goal.is_atomic = True
             await repo.update(uow.session, goal)
             return []
@@ -392,7 +397,7 @@ class GoalDecomposer:
         
         can_proceed, reason = goal_contract_validator.check_subgoals_limit(goal, current_subgoals_count)
         if not can_proceed:
-            print(f"⛔ Subgoals limit reached: {reason}")
+            logger.warning("subgoals_limit_reached", reason=reason)
             return []
         
         # 5. Генерируем подцели (LLM call - вне транзакции это было бы опасно, но здесь ок)
@@ -404,7 +409,7 @@ class GoalDecomposer:
             current_subgoals_count + len(subgoals)
         )
         if not can_proceed:
-            print(f"⛔ Would exceed subgoals limit: {reason}")
+            logger.warning("would_exceed_subgoals_limit", reason=reason)
             if goal.goal_contract:
                 max_subgoals = goal.goal_contract.get("max_subgoals", 100)
                 subgoals = subgoals[:max(0, max_subgoals - current_subgoals_count)]
@@ -453,13 +458,13 @@ class GoalDecomposer:
             )
             
             if transition_result["result"] != "success":
-                print(f"⚠️  Transition to active failed: {transition_result}")
+                logger.error("transition_to_active_failed", result=transition_result)
                 return created_subgoals
             
             goal.progress = 0.0
             await repo.update(uow.session, goal)
         
-        print(f"✅ Decomposed '{goal.title}' → {len(created_subgoals)} subgoals (atomic transaction)")
+        logger.info("goal_decomposed", goal_title=goal.title, subgoals_count=len(created_subgoals))
         
         # 9. Отправляем уведомление (fire-and-forget, вне транзакции)
         await self._send_decomposition_notification(goal, created_subgoals)
@@ -514,7 +519,7 @@ class GoalDecomposer:
 3. Избегай подцелей, которые конфликтуют с ценностями пользователя
 """
         except Exception as e:
-            print(f"⚠️  Could not load personality profile: {e}")
+            logger.warning("personality_profile_load_failed", error=str(e))
             values_context = "\n(Используй универсальные ценности при декомпозиции)"
 
         decomposition_prompt = f"""Ты - эксперт по декомпозиции целей. Разбей цель на подцели согласно онтологии Goal System.
@@ -571,13 +576,13 @@ class GoalDecomposer:
                 result = result.split("```")[1].split("```")[0].strip()
 
             data = json.loads(result)
-            print(f"✅ Decomposition completed with {len(data.get('subgoals', []))} subgoals")
-            print(f"   User values: {', '.join(value_list[:3]) if value_list else 'N/A'}")
+            logger.info("decomposition_completed", subgoals_count=len(data.get("subgoals", [])))
+            logger.debug("user_values", values=", ".join(value_list[:3]) if value_list else "N/A")
             return data.get("subgoals", [])
 
         except Exception as e:
-            print(f"❌ Decomposition error: {e}")
-            print(f"   Raw response was: {str(result)[:200] if 'result' in locals() else 'No response'}")
+            logger.error("decomposition_error", error=str(e))
+            logger.debug("decomposition_raw_response", response=str(result)[:200] if "result" in locals() else "No response")
             # Если не удалось декомпозировать - помечаем как atomic
             goal.is_atomic = True
             return []
