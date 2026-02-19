@@ -1,0 +1,267 @@
+networks:
+  ns_network:
+    driver: bridge
+services:
+  avatar:
+    build: ./services/avatar
+    container_name: ns_avatar
+    environment:
+      CORE_URL: http://core:8000
+    networks:
+    - ns_network
+    ports:
+    - 8005:8005
+    restart: always
+  core:
+    build: ./services/core
+    container_name: ns_core
+    depends_on:
+    - postgres
+    - redis
+    - litellm
+    env_file: .env
+    environment:
+      ARTIFACTS_PATH: /data/artifacts
+      FALLBACK_MODEL: ${FALLBACK_MODEL:-ollama/qwen2.5-coder:latest}
+      GROQ_COOLDOWN_HOURS: ${GROQ_COOLDOWN_HOURS:-1}
+      LLM_MODEL: ${LLM_MODEL:-cloud-reasoner}
+      OPENAI_API_BASE: http://ns_litellm:4000/v1
+      OPENAI_API_KEY: sk-1234
+    networks:
+    - ns_network
+    ports:
+    - 8000:8000
+    restart: always
+    volumes:
+    - ./services/core:/app
+  core_worker:
+    build: ./services/core
+    command: celery -A tasks.celery_app worker --loglevel=info -Q default -c 8
+    container_name: ns_core_worker
+    depends_on:
+    - core
+    - redis
+    env_file: .env
+    environment:
+      ARTIFACTS_PATH: /data/artifacts
+      OPENAI_API_BASE: http://ns_litellm:4000/v1
+      OPENAI_API_KEY: sk-1234
+      PYTHONPATH: /app
+    networks:
+    - ns_network
+    restart: always
+    volumes:
+    - ./skills:/app/skills
+    - ./data/artifacts:/data/artifacts
+  dashboard:
+    build: ./services/dashboard
+    container_name: ns_dashboard
+    env_file: .env
+    networks:
+    - ns_network
+    ports:
+    - 8501:8501
+    restart: always
+    user: root
+    volumes:
+    - ./skills:/app/skills
+    - /var/run/docker.sock:/var/run/docker.sock
+  etcd:
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls=http://0.0.0.0:2379
+    container_name: ns_etcd
+    environment:
+    - ALLOW_NONE_AUTHENTICATION=yes
+    image: quay.io/coreos/etcd:v3.5.0
+    networks:
+    - ns_network
+    restart: always
+  governor:
+    build: ./services/governor
+    container_name: ns_governor
+    env_file: .env
+    networks:
+    - ns_network
+    restart: always
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  litellm:
+    command:
+    - --config
+    - /app/config.yaml
+    - --port
+    - '4000'
+    - --detailed_debug
+    container_name: ns_litellm
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ns_postgres:5432/${POSTGRES_DB}
+      LITELLM_CONFIG: /app/config.yaml
+    extra_hosts:
+    - host.docker.internal:172.25.48.1
+    - ollama.host:172.25.48.1
+    image: litellm/litellm:latest
+    networks:
+    - ns_network
+    ports:
+    - 4000:4000
+    restart: always
+    volumes:
+    - ./infra/litellm_config.yaml:/app/config.yaml
+  memory:
+    build: ./services/memory
+    container_name: ns_memory
+    depends_on:
+    - milvus
+    - neo4j
+    env_file: .env
+    environment:
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+    networks:
+    - ns_network
+    ports:
+    - 8001:8001
+    restart: always
+  milvus:
+    command: milvus run standalone
+    container_name: ns_milvus
+    depends_on:
+    - etcd
+    - minio
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+      MINIO_ADDRESS: minio:9000
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+    image: milvusdb/milvus:v2.3.0
+    networks:
+    - ns_network
+    ports:
+    - 19530:19530
+    restart: always
+  minio:
+    command: server /data --console-address ":9001"
+    container_name: ns_minio
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+    image: minio/minio:latest
+    networks:
+    - ns_network
+    ports:
+    - 9000:9000
+    - 9001:9001
+    restart: always
+    volumes:
+    - ./infra/minio_data:/data
+  neo4j:
+    container_name: ns_neo4j
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512M
+    image: neo4j:5.12
+    networks:
+    - ns_network
+    ports:
+    - 7474:7474
+    - 7687:7687
+    restart: always
+    volumes:
+    - ./infra/neo4j_data/data:/data
+    - ./infra/neo4j_data/logs:/logs
+  opencode:
+    build: ./services/opencode
+    container_name: ns_opencode
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    env_file: .env
+    networks:
+    - ns_network
+    ports:
+    - 8002:8002
+    restart: always
+    volumes:
+    - ./skills:/app/skills
+  postgres:
+    container_name: ns_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+    healthcheck:
+      interval: 5s
+      retries: 10
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      timeout: 5s
+    image: postgres:16-alpine
+    networks:
+    - ns_network
+    ports:
+    - 5432:5432
+    restart: always
+    volumes:
+    - ./infra/postgres_data:/var/lib/postgresql/data
+  redis:
+    container_name: ns_redis
+    image: redis:7-alpine
+    networks:
+    - ns_network
+    ports:
+    - 6379:6379
+    restart: always
+  telegram:
+    build: ./services/telegram
+    container_name: ns_telegram
+    env_file: .env
+    networks:
+    - ns_network
+    ports:
+    - 8004:8004
+    restart: always
+  wallet:
+    build: ./services/wallet
+    container_name: ns_wallet
+    networks:
+    - ns_network
+    ports:
+    - 8006:8006
+    restart: always
+    volumes:
+    - ./infra/wallet_data:/app/data
+  webhook:
+    build: ./services/webhook
+    container_name: ns_webhook
+    env_file: .env
+    networks:
+    - ns_network
+    ports:
+    - 8007:8007
+    restart: always
+  websurfer:
+    build: ./services/websurfer
+    container_name: ns_websurfer
+    env_file: .env
+    environment:
+    - WEBDRIVER_HOST=127.0.0.1
+    network_mode: host
+    restart: always
+    shm_size: 2gb
+    volumes:
+    - ./infra/browser_data:/app/browser_data
+version: '3.8'

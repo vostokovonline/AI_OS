@@ -1,0 +1,71 @@
+skill:
+  name: ask_user
+  version: "1.0"
+
+  description: >
+    Intelligently asks the user for clarification when needed.
+    Uses throttling to prevent excessive questions and only asks
+    when the information is critical for goal completion.
+
+    Features:
+    - AI-powered necessity detection
+    - Throttling mechanism (10 questions per goal, 2 per hour)
+    - Timeout handling with auto-recovery
+    - Priority-based queuing
+
+  category: communication
+  agent_roles: [Planner, Executor, Supervisor]
+
+  inputs:
+    schema: QuestionRequest
+    required: [question, context, goal_id]
+    optional: [options, priority, timeout_action, default_answer, timeout_seconds]
+
+  outputs:
+    artifact_type: KNOWLEDGE
+    schema: UserResponse
+    reusable: true
+
+  produces:
+    - type: KNOWLEDGE
+      store: db
+      tags: [user_input, clarification]
+    - type: FILE
+      format: json
+      path_template: results/{goal_id}/user_questions.json
+      tags: [communication, questions]
+
+  constraints:
+    max_questions_per_hour: 2
+    max_questions_per_goal: 10
+    min_time_between_questions: 300  # 5 minutes
+    default_timeout_sec: 3600  # 1 hour for user response
+
+  timeout_actions:
+    - action: continue_with_default
+      description: "Use default answer if provided"
+      requires: [default_answer]
+
+    - action: fail_goal
+      description: "Mark goal as failed on timeout"
+      requires: []
+
+    - action: wait_longer
+      description: "Extend timeout by 1 hour (max 3 extensions)"
+      requires: []
+
+  verification:
+    - name: question_not_empty
+      rule: len(question) > 10
+      description: Question must be meaningful
+    - name: has_context
+      rule: len(context) > 20
+      description: Must provide context
+    - name: within_throttle_limits
+      rule: within_throttle == true
+      description: Must respect throttling limits
+
+  failure_modes:
+    - throttle_limit_exceeded
+    - no_response_after_timeout
+    - invalid_response

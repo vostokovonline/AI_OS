@@ -1,0 +1,49 @@
+skill:
+  name: code_analysis
+  version: "1.0"
+
+  description: >
+    Analyzes codebase and produces structured analysis report
+    with findings and metrics.
+
+  category: analysis
+  agent_roles: [Coder, Researcher]
+
+  inputs:
+    schema: CodeAnalysisQuery
+    required: [repo_path, analysis_type]
+    optional: [target_files, exclude_patterns]
+
+  outputs:
+    artifact_type: REPORT
+    schema: CodeAnalysisReport
+    reusable: true
+
+  produces:
+    - type: FILE
+      store: file
+      format: markdown
+      path_template: results/{goal_id}/analysis.md
+      tags: [code, analysis]
+    - type: FILE
+      store: file
+      format: json
+      path_template: results/{goal_id}/metrics.json
+      tags: [code, metrics]
+
+  constraints:
+    max_tokens: 8000
+    timeout_sec: 120
+
+  verification:
+    - name: file_exists
+      rule: analysis_file_exists == true
+      description: Analysis file must be created
+    - name: min_findings
+      rule: findings_count >= 1
+      description: Must find at least 1 issue or insight
+
+  failure_modes:
+    - repo_not_found
+    - parse_error
+    - timeout

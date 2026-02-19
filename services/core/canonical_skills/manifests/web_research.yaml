@@ -1,0 +1,51 @@
+skill:
+  name: web_research
+  version: "1.0"
+
+  description: >
+    Performs web search and produces a structured research artifact
+    with sources and summary.
+
+  category: research
+  agent_roles: [Researcher, WebSurfer]
+
+  inputs:
+    schema: SearchQuery
+    required: [query]
+    optional: [max_sources, time_range]
+
+  outputs:
+    artifact_type: REPORT
+    schema: ResearchReport
+    reusable: true
+
+  produces:
+    - type: KNOWLEDGE
+      store: vector_db
+      tags: [research, web]
+    - type: FILE
+      format: markdown
+      path_template: results/{goal_id}/research.md
+      tags: [research, web, sources]
+
+  constraints:
+    max_tokens: 4000
+    max_sources: 7
+    timeout_sec: 60
+    requires_api: [search]
+
+  verification:
+    - name: min_sources
+      rule: sources_count >= 3
+      description: Must have at least 3 sources
+    - name: citations_present
+      rule: has_citations == true
+      description: Must include citations
+    - name: non_empty_summary
+      rule: len(summary) > 300
+      description: Summary must be > 300 characters
+
+  failure_modes:
+    - no_sources
+    - timeout
+    - empty_result
