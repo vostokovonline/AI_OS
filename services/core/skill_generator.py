@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 SKILL GENERATOR - Self-Writing Skills System
 Генерирует навыки на основе требований используя LLM
@@ -219,25 +222,25 @@ class SkillGenerator:
                 "test_results": list
             }
         """
-        print(f"\n🤖 SKILL GENERATION STARTED")
-        print(f"   Requirements: {requirements}")
-        print(f"   Goal: {goal_context.get('title', 'Unknown')}")
+        logger.info(f"\n🤖 SKILL GENERATION STARTED")
+        logger.info(f"   Requirements: {requirements}")
+        logger.info(f"   Goal: {goal_context.get('title', 'Unknown')}")
 
         # 1. Infer skill type
         skill_type = self._infer_skill_type(requirements, goal_context)
-        print(f"   🔮 Inferred skill type: {skill_type}")
+        logger.info(f"   🔮 Inferred skill type: {skill_type}")
 
         # 1.5. Check if skill already exists
         skill_path = self.skills_dir / f"{skill_type}.py"
         skill_id = f"core.{skill_type}"
 
         if skill_path.exists():
-            print(f"   ♻️  Skill already exists: {skill_path}")
+            logger.info(f"   ♻️  Skill already exists: {skill_path}")
             # Verify it's in registry
             from canonical_skills.registry import skill_registry
             existing_skill = skill_registry.get(skill_id)
             if existing_skill:
-                print(f"   ✅ Using existing skill: {skill_id}")
+                logger.info(f"   ✅ Using existing skill: {skill_id}")
                 return {
                     "success": True,
                     "skill_path": str(skill_path),
@@ -248,7 +251,7 @@ class SkillGenerator:
                     "cached": True
                 }
             else:
-                print(f"   ⚠️  File exists but not in registry, will reload")
+                logger.info(f"   ⚠️  File exists but not in registry, will reload")
 
         # 2. Build prompt
         prompt = self._build_generation_prompt(
@@ -262,7 +265,7 @@ class SkillGenerator:
         validation_errors = []
 
         for attempt in range(max_retries):
-            print(f"   📝 Generation attempt {attempt + 1}/{max_retries}")
+            logger.info(f"   📝 Generation attempt {attempt + 1}/{max_retries}")
 
             try:
                 skill_code = self._call_llm(prompt)
@@ -271,19 +274,19 @@ class SkillGenerator:
                 is_valid, errors = self.validator.validate(skill_code)
 
                 if is_valid:
-                    print(f"   ✅ Validation: PASSED")
+                    logger.info(f"   ✅ Validation: PASSED")
                     break
                 else:
-                    print(f"   ❌ Validation: FAILED")
+                    logger.info(f"   ❌ Validation: FAILED")
                     for error in errors:
-                        print(f"      - {error}")
+                        logger.info(f"      - {error}")
                     validation_errors = errors
 
                     # Retry with feedback
                     prompt = self._build_retry_prompt(prompt, errors)
 
             except Exception as e:
-                print(f"   ❌ Generation error: {e}")
+                logger.info(f"   ❌ Generation error: {e}")
                 validation_errors.append(str(e))
 
         if not skill_code:
@@ -295,23 +298,23 @@ class SkillGenerator:
 
         # 4. Save skill
         skill_path = self._save_skill_file(skill_type, skill_code)
-        print(f"   💾 Saved: {skill_path}")
+        logger.info(f"   💾 Saved: {skill_path}")
 
         # 5. Test skill
         all_passed, test_results = self.tester.test_skill(str(skill_path))
 
-        print(f"   🧪 Tests: {sum(1 for r in test_results if 'PASSED' in r)}/{len(test_results)} passed")
+        logger.info(f"   🧪 Tests: {sum(1 for r in test_results if 'PASSED' in r)}/{len(test_results)} passed")
 
         if not all_passed:
             for result in test_results:
-                print(f"      {result}")
+                logger.info(f"      {result}")
 
         # 6. Reload registry
         self._reload_skill_registry(skill_type)
 
         skill_id = f"core.{skill_type}"
 
-        print(f"   ✅ SKILL GENERATED: {skill_id}")
+        logger.info(f"   ✅ SKILL GENERATED: {skill_id}")
 
         return {
             "success": True,
@@ -559,13 +562,13 @@ Ensure all validation checks pass.
                         instance = attr()
                         if hasattr(instance, 'execute') and hasattr(instance, 'verify'):
                             skill_registry.register(instance)
-                            print(f"   ✅ Skill registered in registry")
+                            logger.info(f"   ✅ Skill registered in registry")
                             break
                     except:
                         pass
 
         except Exception as e:
-            print(f"   ⚠️  Registry reload: {e}")
+            logger.info(f"   ⚠️  Registry reload: {e}")
 
 
 # Global instance

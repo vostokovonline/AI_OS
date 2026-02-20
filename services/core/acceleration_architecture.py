@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 ACCELERATION ARCHITECTURE v1.0
 ==============================
@@ -443,52 +446,52 @@ if __name__ == "__main__":
     import asyncio
 
     async def test():
-        print("Testing Acceleration Architecture...\n")
-        print("=" * 70)
+        logger.info("Testing Acceleration Architecture...\n")
+        logger.info("=" * 70)
 
         # Get full health report
         health = await acceleration_architecture.get_system_health()
 
-        print(f"\nOVERALL STATE: {health['overall_state']}")
-        print(f"Confidence: {health['confidence']:.0%}")
+        logger.info(f"\nOVERALL STATE: {health['overall_state']}")
+        logger.info(f"Confidence: {health['confidence']:.0%}")
 
-        print("\n" + "=" * 70)
-        print("CONTROL vs ACCELERATION")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("CONTROL vs ACCELERATION")
+        logger.info("=" * 70)
         balance = health['control_vs_acceleration']
-        print(f"Ratio: {balance['ratio']}")
-        print(f"Control: {balance['control']:.2%}")
-        print(f"Acceleration: {balance['acceleration']:.2%}")
-        print(f"\nInterpretation: {balance['interpretation']}")
+        logger.info(f"Ratio: {balance['ratio']}")
+        logger.info(f"Control: {balance['control']:.2%}")
+        logger.info(f"Acceleration: {balance['acceleration']:.2%}")
+        logger.info(f"\nInterpretation: {balance['interpretation']}")
 
-        print("\n" + "=" * 70)
-        print("VELOCITY")
-        print("=" * 70)
-        print(f"State: {health['velocity']['velocity_state']}")
-        print(f"Cycle Time: {health['velocity']['metrics']['avg_cycle_time_days']} days")
-        print(f"Completion Rate: {health['velocity']['metrics']['completion_rate_per_month']}/month")
-        print(f"Stagnation Ratio: {health['velocity']['metrics']['stagnation_ratio']:.1%}")
+        logger.info("\n" + "=" * 70)
+        logger.info("VELOCITY")
+        logger.info("=" * 70)
+        logger.info(f"State: {health['velocity']['velocity_state']}")
+        logger.info(f"Cycle Time: {health['velocity']['metrics']['avg_cycle_time_days']} days")
+        logger.info(f"Completion Rate: {health['velocity']['metrics']['completion_rate_per_month']}/month")
+        logger.info(f"Stagnation Ratio: {health['velocity']['metrics']['stagnation_ratio']:.1%}")
 
-        print("\n" + "=" * 70)
-        print("DRIFT DETECTION")
-        print("=" * 70)
-        print(f"Status: {health['drift']['overall_status']}")
-        print(f"Drifts Detected: {health['drift']['drifts_detected']}")
+        logger.info("\n" + "=" * 70)
+        logger.info("DRIFT DETECTION")
+        logger.info("=" * 70)
+        logger.info(f"Status: {health['drift']['overall_status']}")
+        logger.info(f"Drifts Detected: {health['drift']['drifts_detected']}")
 
-        print("\n" + "=" * 70)
-        print("INTERVENTIONS")
-        print("=" * 70)
-        print(f"Required: {health['interventions']['interventions_required']}")
-        print(f"By Priority: {health['interventions']['by_priority']}")
+        logger.info("\n" + "=" * 70)
+        logger.info("INTERVENTIONS")
+        logger.info("=" * 70)
+        logger.info(f"Required: {health['interventions']['interventions_required']}")
+        logger.info(f"By Priority: {health['interventions']['by_priority']}")
 
-        print("\n" + "=" * 70)
-        print("RECOMMENDED ACTIONS")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("RECOMMENDED ACTIONS")
+        logger.info("=" * 70)
         for action in health['recommended_actions']:
-            print(f"\n[{action['priority']}] {action['action']}")
-            print(f"  Reason: {action['reason']}")
-            print(f"  Effect: {action['expected_effect']}")
+            logger.info(f"\n[{action['priority']}] {action['action']}")
+            logger.info(f"  Reason: {action['reason']}")
+            logger.info(f"  Effect: {action['expected_effect']}")
 
-        print("\n" + "=" * 70)
+        logger.info("\n" + "=" * 70)
 
     asyncio.run(test())

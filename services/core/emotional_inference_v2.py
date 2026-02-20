@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 Emotional Inference Engine v2 (EIE v2)
 =====================================
@@ -523,12 +526,12 @@ class EmotionalForecastingEngine:
                         metrics=metrics
                     )
 
-                    print(f"🎯 [ML Calibration] {ml_conf:.3f} → {calibrated_ml_conf:.3f}")
+                    logger.info(f"🎯 [ML Calibration] {ml_conf:.3f} → {calibrated_ml_conf:.3f}")
 
                     # Используем откалиброванный confidence
                     ml_conf = calibrated_ml_conf
                 except Exception as calib_err:
-                    print(f"⚠️  [ML Calibration] Failed: {calib_err}, using raw confidence")
+                    logger.info(f"⚠️  [ML Calibration] Failed: {calib_err}, using raw confidence")
 
                 # 🆕 PER-ACTION CONFIDENCE: Check threshold for this action
                 from ml_guardrails import per_action_confidence
@@ -537,14 +540,14 @@ class EmotionalForecastingEngine:
                 if ml_conf >= action_threshold:  # Используем ML только если уверена
                     ml_impact = ml_deltas
                     ml_confidence = ml_conf
-                    print(f"🤖 [ML Model] Using ML forecast (confidence={ml_conf:.2f}, threshold={action_threshold:.2f})")
+                    logger.info(f"🤖 [ML Model] Using ML forecast (confidence={ml_conf:.2f}, threshold={action_threshold:.2f})")
                 else:
-                    print(f"⚠️  [ML Model] Low confidence ({ml_conf:.2f} < {action_threshold:.2f}), trying next tier")
+                    logger.info(f"⚠️  [ML Model] Low confidence ({ml_conf:.2f} < {action_threshold:.2f}), trying next tier")
             else:
-                print(f"ℹ️  [ML Model] Not available, trying next tier")
+                logger.info(f"ℹ️  [ML Model] Not available, trying next tier")
 
         except Exception as e:
-            print(f"⚠️  [ML Model] Error: {e}, trying next tier")
+            logger.info(f"⚠️  [ML Model] Error: {e}, trying next tier")
 
         # 🆕 TIER 2: Trajectory-based forecasting (если ML не сработал)
         cluster_impact = {}
@@ -587,12 +590,12 @@ class EmotionalForecastingEngine:
 
                 if cluster_confidence > 0.3:  # Используем кластеры только если достаточно уверены
                     cluster_impact = cluster_deltas
-                    print(f"📊 [Trajectory Clustering] Using cluster-based forecast (confidence={cluster_confidence:.2f})")
+                    logger.info(f"📊 [Trajectory Clustering] Using cluster-based forecast (confidence={cluster_confidence:.2f})")
                 else:
-                    print(f"⚠️  [Trajectory Clustering] Low confidence, falling back to rules")
+                    logger.info(f"⚠️  [Trajectory Clustering] Low confidence, falling back to rules")
 
             except Exception as e:
-                print(f"⚠️  [Trajectory Clustering] Error: {e}, using rule-based")
+                logger.info(f"⚠️  [Trajectory Clustering] Error: {e}, using rule-based")
 
         # 🆕 TIER 3: Rule-based forecasting (SAFETY NET - всегда работает)
         base_impact = self.ACTION_IMPACTS.get(action, {})
@@ -612,7 +615,7 @@ class EmotionalForecastingEngine:
 
             used_tiers.append("ML")
             used_tiers.append("Rules (safety net)")
-            print(f"🔀 [Mixed Forecast] ML + Rules (weight={weight:.2f})")
+            logger.info(f"🔀 [Mixed Forecast] ML + Rules (weight={weight:.2f})")
 
         elif cluster_impact and cluster_confidence > 0.3:
             # Clusters + rules
@@ -624,14 +627,14 @@ class EmotionalForecastingEngine:
 
             used_tiers.append("Clusters")
             used_tiers.append("Rules (safety net)")
-            print(f"🔀 [Mixed Forecast] Clusters + Rules (weight={weight:.2f})")
+            logger.info(f"🔀 [Mixed Forecast] Clusters + Rules (weight={weight:.2f})")
 
         else:
             # Rules only
             final_impact = adjusted_impact
             used_tiers.append("Rules only")
 
-        print(f"📊 [Forecast Tiers] {' → '.join(used_tiers)}")
+        logger.info(f"📊 [Forecast Tiers] {' → '.join(used_tiers)}")
 
         # Predict new state
         predicted = EmotionalState(
@@ -795,11 +798,11 @@ class EmotionalForecastingEngine:
                         if goal:
                             goal.forecast_id = forecast_record.id
                             db.commit()
-                            print(f"🔗 [Forecast Persistence] Linked forecast {forecast_id} to goal {goal_id}")
+                            logger.info(f"🔗 [Forecast Persistence] Linked forecast {forecast_id} to goal {goal_id}")
                     except Exception as goal_err:
-                        print(f"⚠️  [Forecast Persistence] Failed to link to goal: {goal_err}")
+                        logger.info(f"⚠️  [Forecast Persistence] Failed to link to goal: {goal_err}")
 
-                print(f"💾 [Forecast Persistence] Saved forecast {forecast_id} (tier={used_tier}, conf={final_confidence:.2f})")
+                logger.info(f"💾 [Forecast Persistence] Saved forecast {forecast_id} (tier={used_tier}, conf={final_confidence:.2f})")
 
                 return forecast_id, used_tier
 
@@ -807,7 +810,7 @@ class EmotionalForecastingEngine:
                 db.close()
 
         except Exception as e:
-            print(f"⚠️  [Forecast Persistence] Failed to save forecast: {e}")
+            logger.info(f"⚠️  [Forecast Persistence] Failed to save forecast: {e}")
             import traceback
             traceback.print_exc()
 
@@ -1056,7 +1059,7 @@ class EmotionalInferenceEngineV2:
         )
 
         if not aligned:
-            print(f"⚠️  Intent misalignment: {reason}")
+            logger.info(f"⚠️  Intent misalignment: {reason}")
 
         # 5. Generate decision modifiers
         modifiers = self.modifiers_engine.generate(
@@ -1066,13 +1069,13 @@ class EmotionalInferenceEngineV2:
         )
 
         # Log for debugging
-        print(f"🧠 [EIE v2] Inference for user {user_id}:")
-        print(f"   Current state: arousal={current_state.arousal:.2f}, valence={current_state.valence:.2f}")
-        print(f"   Forecast: {forecast.predicted_state.arousal:.2f}, {forecast.predicted_state.valence:.2f}")
-        print(f"   Risks: {forecast.risk_flags}")
-        print(f"   Modifiers: max_depth={modifiers.max_depth}, pace={modifiers.pace}")
+        logger.info(f"🧠 [EIE v2] Inference for user {user_id}:")
+        logger.info(f"   Current state: arousal={current_state.arousal:.2f}, valence={current_state.valence:.2f}")
+        logger.info(f"   Forecast: {forecast.predicted_state.arousal:.2f}, {forecast.predicted_state.valence:.2f}")
+        logger.info(f"   Risks: {forecast.risk_flags}")
+        logger.info(f"   Modifiers: max_depth={modifiers.max_depth}, pace={modifiers.pace}")
         if modifiers.safety_override:
-            print(f"   🔒 SAFETY OVERRIDE ACTIVE")
+            logger.info(f"   🔒 SAFETY OVERRIDE ACTIVE")
 
         return modifiers
 

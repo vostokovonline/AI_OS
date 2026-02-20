@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 #!/usr/bin/env python3
 """
 Verify Model Integrity - Pre-deployment Check
@@ -24,10 +27,10 @@ def check_model_syntax(filepath: Path) -> bool:
         with open(filepath, 'r') as f:
             source = f.read()
         ast.parse(source)
-        print(f"✅ {filepath.name} - syntax valid")
+        logger.info(f"✅ {filepath.name} - syntax valid")
         return True
     except SyntaxError as e:
-        print(f"❌ {filepath.name} - syntax error: {e}")
+        logger.info(f"❌ {filepath.name} - syntax error: {e}")
         return False
 
 def extract_model_classes(filepath: Path) -> list:
@@ -52,14 +55,14 @@ def extract_model_classes(filepath: Path) -> list:
 
 def verify_models():
     """Main verification routine"""
-    print("=" * 70)
-    print("MODEL INTEGRITY VERIFICATION")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("MODEL INTEGRITY VERIFICATION")
+    logger.info("=" * 70)
     
     models_file = Path(__file__).parent / "models.py"
     
     if not models_file.exists():
-        print(f"❌ models.py not found at {models_file}")
+        logger.info(f"❌ models.py not found at {models_file}")
         return 1
     
     # Check 1: Syntax
@@ -68,36 +71,36 @@ def verify_models():
     
     # Check 2: Extract models
     models = extract_model_classes(models_file)
-    print(f"\n📊 Found {len(models)} model classes:")
+    logger.info(f"\n📊 Found {len(models)} model classes:")
     for model in sorted(models):
-        print(f"   • {model}")
+        logger.info(f"   • {model}")
     
     # Check 3: Critical models present
     critical_models = ['Goal', 'GoalStatusTransition', 'Artifact']
     missing = [m for m in critical_models if m not in models]
     
     if missing:
-        print(f"\n❌ CRITICAL MODELS MISSING: {', '.join(missing)}")
+        logger.info(f"\n❌ CRITICAL MODELS MISSING: {', '.join(missing)}")
         return 2
     else:
-        print(f"\n✅ All critical models present")
+        logger.info(f"\n✅ All critical models present")
     
     # Check 4: GoalStatusTransition has required fields
-    print("\n📋 Checking GoalStatusTransition structure...")
+    logger.info("\n📋 Checking GoalStatusTransition structure...")
     with open(models_file, 'r') as f:
         content = f.read()
     
     required_fields = ['goal_id', 'from_status', 'to_status', 'reason', 'created_at']
     for field in required_fields:
         if field in content:
-            print(f"   ✅ {field}")
+            logger.info(f"   ✅ {field}")
         else:
-            print(f"   ❌ {field} - MISSING")
+            logger.info(f"   ❌ {field} - MISSING")
             return 2
     
-    print("\n" + "=" * 70)
-    print("✅ ALL CHECKS PASSED - Ready for deployment")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info("✅ ALL CHECKS PASSED - Ready for deployment")
+    logger.info("=" * 70)
     return 0
 
 if __name__ == "__main__":

@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 PARENT PROGRESS AGGREGATOR - Update parent progress when children complete
 ========================================================================
@@ -151,9 +154,9 @@ class ParentProgressAggregator:
                 "details": []
             }
 
-            print(f"\n{'='*70}")
-            print(f"RECALCULATING PARENT PROGRESS: {len(parents)} parents")
-            print(f"{'='*70}")
+            logger.info(f"\n{'='*70}")
+            logger.info(f"RECALCULATING PARENT PROGRESS: {len(parents)} parents")
+            logger.info(f"{'='*70}")
 
             for parent in parents:
                 try:
@@ -210,15 +213,15 @@ class ParentProgressAggregator:
                     report["details"].append(detail)
 
                     if abs(new_progress - old_progress) > 0.1 or status_changed:
-                        print(f"\n✅ {parent.title[:40]}")
-                        print(f"   Progress: {old_progress:.0%} → {new_progress:.0%}")
-                        print(f"   Children: {done}/{total} done")
+                        logger.info(f"\n✅ {parent.title[:40]}")
+                        logger.info(f"   Progress: {old_progress:.0%} → {new_progress:.0%}")
+                        logger.info(f"   Children: {done}/{total} done")
                         if status_changed:
-                            print(f"   Status: {old_progress if not status_changed else 'changed'} → {parent.status}")
+                            logger.info(f"   Status: {old_progress if not status_changed else 'changed'} → {parent.status}")
 
                 except Exception as e:
                     report["errors"] += 1
-                    print(f"\n❌ ERROR updating {parent.title[:40]}: {e}")
+                    logger.info(f"\n❌ ERROR updating {parent.title[:40]}: {e}")
 
             return report
 
@@ -311,18 +314,18 @@ if __name__ == "__main__":
     import asyncio
 
     async def test():
-        print("Testing Parent Progress Aggregator...\n")
+        logger.info("Testing Parent Progress Aggregator...\n")
 
         # Test 1: Get stuck parents report
         report = await parent_progress_aggregator.get_stuck_parents_report()
 
-        print(f"Stuck parents: {report['stuck_parents']}")
-        print("\nTop 10:")
+        logger.info(f"Stuck parents: {report['stuck_parents']}")
+        logger.info("\nTop 10:")
         for i, parent in enumerate(report['details'][:10], 1):
-            print(f"\n{i}. {parent['parent_title']}")
-            print(f"   Stored: {parent['stored_progress']:.0%}")
-            print(f"   Real: {parent['real_progress']:.0%}")
-            print(f"   Children: {parent['children']}")
-            print(f"   Diff: {parent['diff']:.2f}")
+            logger.info(f"\n{i}. {parent['parent_title']}")
+            logger.info(f"   Stored: {parent['stored_progress']:.0%}")
+            logger.info(f"   Real: {parent['real_progress']:.0%}")
+            logger.info(f"   Children: {parent['children']}")
+            logger.info(f"   Diff: {parent['diff']:.2f}")
 
     asyncio.run(test())

@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 GOAL INVARIANTS CHECKER v1.0
 ============================
@@ -388,38 +391,38 @@ def print_violation_report(scan_result: Dict) -> None:
     Args:
         scan_result: Result from scan_all_goals()
     """
-    print("\n" + "="*70)
-    print("GOAL INVARIANTS SCAN REPORT")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info("GOAL INVARIANTS SCAN REPORT")
+    logger.info("="*70)
 
-    print(f"\n📊 STATISTICS:")
-    print(f"  Total goals: {scan_result['total_goals']}")
-    print(f"  Violations found: {scan_result['violations_count']}")
-    print(f"  Violation rate: {scan_result['violations_count'] / scan_result['total_goals'] * 100:.1f}%")
+    logger.info(f"\n📊 STATISTICS:")
+    logger.info(f"  Total goals: {scan_result['total_goals']}")
+    logger.info(f"  Violations found: {scan_result['violations_count']}")
+    logger.info(f"  Violation rate: {scan_result['violations_count'] / scan_result['total_goals'] * 100:.1f}%")
 
-    print(f"\n📋 BY GOAL TYPE:")
+    logger.info(f"\n📋 BY GOAL TYPE:")
     for goal_type, count in scan_result['by_goal_type'].items():
-        print(f"  {goal_type}: {count} violations")
+        logger.info(f"  {goal_type}: {count} violations")
 
     if scan_result['violations']:
-        print(f"\n⚠️  VIOLATIONS ({len(scan_result['violations'])} goals):")
-        print("-"*70)
+        logger.info(f"\n⚠️  VIOLATIONS ({len(scan_result['violations'])} goals):")
+        logger.info("-"*70)
 
         for i, v in enumerate(scan_result['violations'][:20], 1):  # Show first 20
-            print(f"\n{i}. Goal: {v['title']}")
-            print(f"   Type: {v['goal_type']}")
-            print(f"   Status: {v['status']}")
-            print(f"   Atomic: {v['is_atomic']}")
-            print(f"   Violations:")
+            logger.info(f"\n{i}. Goal: {v['title']}")
+            logger.info(f"   Type: {v['goal_type']}")
+            logger.info(f"   Status: {v['status']}")
+            logger.info(f"   Atomic: {v['is_atomic']}")
+            logger.info(f"   Violations:")
             for viol in v['violations']:
-                print(f"     - {viol}")
+                logger.info(f"     - {viol}")
 
         if len(scan_result['violations']) > 20:
-            print(f"\n... and {len(scan_result['violations']) - 20} more")
+            logger.info(f"\n... and {len(scan_result['violations']) - 20} more")
     else:
-        print("\n✅ NO INVARIANT VIOLATIONS FOUND")
+        logger.info("\n✅ NO INVARIANT VIOLATIONS FOUND")
 
-    print("="*70 + "\n")
+    logger.info("="*70 + "\n")
 
 
 # =============================================================================
@@ -431,7 +434,7 @@ if __name__ == "__main__":
     from database import AsyncSessionLocal
 
     async def test():
-        print("Testing GoalInvariants...")
+        logger.info("Testing GoalInvariants...")
 
         # Create mock goal with violations
         class MockGoal:
@@ -450,12 +453,12 @@ if __name__ == "__main__":
         # Check invariants
         valid, violations = GoalInvariants.check_goal_completion(goal)
 
-        print(f"\nValid: {valid}")
-        print(f"Violations: {violations}")
+        logger.info(f"\nValid: {valid}")
+        logger.info(f"Violations: {violations}")
 
         if not valid:
-            print("\n✅ Invariants working! Detected violation correctly")
+            logger.info("\n✅ Invariants working! Detected violation correctly")
         else:
-            print("\n❌ Invariants failed! Should have detected violation")
+            logger.info("\n❌ Invariants failed! Should have detected violation")
 
     asyncio.run(test())

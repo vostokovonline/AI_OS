@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 Emotional Feedback Loop Module
 
@@ -81,7 +84,7 @@ class EmotionalFeedbackLoop:
             goal = result.scalar_one_or_none()
 
             if not goal:
-                print(f"⚠️  Goal {goal_id} not found for emotional feedback")
+                logger.info(f"⚠️  Goal {goal_id} not found for emotional feedback")
                 return
 
             # Get current emotional state BEFORE update
@@ -183,22 +186,22 @@ class EmotionalFeedbackLoop:
                         # 6. Обновляем надежность tiers
                         tier_reliability_tracker.update_reliability(emotional_error_store)
 
-                        print(f"📊 [Self-Eval] Recorded forecast error:")
-                        print(f"   Forecast: {forecast.id}")
-                        print(f"   Predicted: {predicted_delta}")
-                        print(f"   Actual:    {actual_delta}")
-                        print(f"   Tier:      {forecast.used_tier}")
-                        print(f"   Errors:    {errors}")
+                        logger.info(f"📊 [Self-Eval] Recorded forecast error:")
+                        logger.info(f"   Forecast: {forecast.id}")
+                        logger.info(f"   Predicted: {predicted_delta}")
+                        logger.info(f"   Actual:    {actual_delta}")
+                        logger.info(f"   Tier:      {forecast.used_tier}")
+                        logger.info(f"   Errors:    {errors}")
                     else:
-                        print(f"⚠️  [Self-Eval] Forecast {goal.forecast_id} not found in DB")
+                        logger.info(f"⚠️  [Self-Eval] Forecast {goal.forecast_id} not found in DB")
 
                 except Exception as e:
-                    print(f"⚠️  [Self-Eval] Failed to record error: {e}")
+                    logger.info(f"⚠️  [Self-Eval] Failed to record error: {e}")
                     import traceback
                     traceback.print_exc()
             else:
                 if not goal.forecast_id:
-                    print(f"ℹ️  [Self-Eval] No forecast_id for goal {goal_id}, skipping self-eval")
+                    logger.info(f"ℹ️  [Self-Eval] No forecast_id for goal {goal_id}, skipping self-eval")
 
             # 🆕 STEP 2.6: Alerting — проверяем критерии после каждого outcome
             # НЕ делаем коррекций — ТОЛЬКО сообщаем о проблемах
@@ -207,14 +210,14 @@ class EmotionalFeedbackLoop:
                 new_alerts = alert_generator.check_and_generate_alerts()
 
                 if new_alerts:
-                    print(f"🚨 [Alerting] Generated {len(new_alerts)} alert(s)")
+                    logger.info(f"🚨 [Alerting] Generated {len(new_alerts)} alert(s)")
                     for alert in new_alerts:
-                        print(f"   - {alert.alert_type} ({alert.severity}): {alert.explanation}")
+                        logger.info(f"   - {alert.alert_type} ({alert.severity}): {alert.explanation}")
                 else:
-                    print(f"ℹ️  [Alerting] No alerts triggered")
+                    logger.info(f"ℹ️  [Alerting] No alerts triggered")
 
             except Exception as e:
-                print(f"⚠️  [Alerting] Failed to check alerts: {e}")
+                logger.info(f"⚠️  [Alerting] Failed to check alerts: {e}")
                 import traceback
                 traceback.print_exc()
 
@@ -226,7 +229,7 @@ class EmotionalFeedbackLoop:
                     new_candidates = intervention_candidates_engine.generate_from_active_alerts()
 
                     if new_candidates:
-                        print(f"💡 [IRL] Generated {len(new_candidates)} intervention candidate(s)")
+                        logger.info(f"💡 [IRL] Generated {len(new_candidates)} intervention candidate(s)")
 
                         # Для каждого candidate: симуляция + risk scoring
                         for candidate in new_candidates:
@@ -244,24 +247,24 @@ class EmotionalFeedbackLoop:
                                     )
 
                                     if risk_score:
-                                        print(f"   📊 Candidate: {candidate.intervention_type}")
-                                        print(f"      Risk tier: {risk_score.risk_tier} (risk={risk_score.total_risk:.3f})")
-                                        print(f"      Δ accuracy: {simulation.delta_metrics.get('direction_accuracy', 0):.3f}")
+                                        logger.info(f"   📊 Candidate: {candidate.intervention_type}")
+                                        logger.info(f"      Risk tier: {risk_score.risk_tier} (risk={risk_score.total_risk:.3f})")
+                                        logger.info(f"      Δ accuracy: {simulation.delta_metrics.get('direction_accuracy', 0):.3f}")
 
                             except Exception as e:
-                                print(f"⚠️  [IRL] Failed to process candidate {candidate.id}: {e}")
+                                logger.info(f"⚠️  [IRL] Failed to process candidate {candidate.id}: {e}")
                     else:
-                        print(f"ℹ️  [IRL] No candidates generated from alerts")
+                        logger.info(f"ℹ️  [IRL] No candidates generated from alerts")
 
             except Exception as e:
-                print(f"⚠️  [IRL] Failed to generate candidates: {e}")
+                logger.info(f"⚠️  [IRL] Failed to generate candidates: {e}")
                 import traceback
                 traceback.print_exc()
 
-            print(f"📊 [Emotional Feedback] Recorded {outcome} for goal {goal_id}")
-            print(f"   Before: {emotional_state_before}")
-            print(f"   After:  {emotional_state_after}")
-            print(f"   Impact: {impact}")
+            logger.info(f"📊 [Emotional Feedback] Recorded {outcome} for goal {goal_id}")
+            logger.info(f"   Before: {emotional_state_before}")
+            logger.info(f"   After:  {emotional_state_after}")
+            logger.info(f"   Impact: {impact}")
 
     def _calculate_emotional_impact(
         self,
