@@ -43,6 +43,11 @@ from executor_feedback_wiring import executor_with_feedback, ExecutionMustStopEx
 from infrastructure.uow import GoalRepository
 from goal_transition_service import transition_service
 
+# Centralized logging
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class GoalExecutorV2:
     """
@@ -69,18 +74,17 @@ class GoalExecutorV2:
         try:
             from canonical_skills.web_research import WebResearchSkill
             web_skill = WebResearchSkill()
-            print(f"   📦 WebResearchSkill created: id={web_skill.id}, capabilities={web_skill.capabilities}")
+            logger.info("web_research_skill_loaded", skill_id=str(web_skill.id), capabilities=web_skill.capabilities)
             skill_registry.register(web_skill)
-            print(f"   ✅ WebResearchSkill registered successfully")
+            logger.info("web_research_skill_registered")
         except Exception as e:
-            print(f"   ⚠️  Failed to load web_research: {e}")
+            logger.warning("web_research_load_failed", error=str(e))
             import traceback
-            traceback.print_exc()
+            logger.error("traceback", exc_info=True)
 
-        print(f"\n✅ Goal Executor V2 initialized")
-        print(f"   Registered skills: {len(skill_registry.list())}")
+        logger.info("goal_executor_v2_initialized", skills_count=len(skill_registry.list()))
         for skill in skill_registry.list():
-            print(f"   - {skill.id} v{skill.version}: {skill.description}")
+            logger.debug("registered_skill", skill_id=skill.id, version=skill.version, description=skill.description)
 
     async def execute_goal(self, goal_id: str, session_id: Optional[str] = None) -> dict:
         """
@@ -168,7 +172,7 @@ class GoalExecutorV2:
 
         All operations use the passed UoW - NO internal commit/rollback.
         """
-        print(f"\n🎯 Executing ATOMIC goal: {goal.title}")
+        logger.info("atomic_goal_execution_started", goal_title=goal.title, goal_id=str(goal.id))
 
         # Start execution trace
         from datetime import datetime
@@ -185,7 +189,7 @@ class GoalExecutorV2:
         try:
             # Step 1: Parse requirements
             requirements = self._parse_requirements(goal)
-            print(f"   📋 Requirements: {requirements}")
+            logger.debug("goal_requirements", requirements=requirements)
 
             trace["steps"].append({
                 "step": "parse_requirements",
@@ -219,11 +223,11 @@ class GoalExecutorV2:
                 "artifacts_produced_by_skill": skill.produces_artifacts
             })
 
-            print(f"   🔧 Selected skill: {skill.id}")
+            logger.info("skill_selected", skill_id=skill.id)
 
             # Step 3: Prepare inputs (async for LLM generation)
             inputs = await self._prepare_inputs(goal, skill)
-            print(f"   📥 Inputs: {list(inputs.keys())}")
+            logger.debug("skill_inputs", inputs=list(inputs.keys()))
 
             trace["steps"].append({
                 "step": "prepare_inputs",
@@ -251,8 +255,8 @@ class GoalExecutorV2:
 
             execution_step_end = datetime.utcnow()
 
-            print(f"   📤 Skill result: {result.success}")
-            print(f"   📦 Artifacts: {len(result.artifacts)}")
+            logger.info("skill_execution_result", success=result.success)
+            logger.info("artifacts_count", count=len(result.artifacts))
 
             # Record execution in trace
             trace["steps"].append({
@@ -320,7 +324,7 @@ class GoalExecutorV2:
             is_valid = skill.verify(result)
             verification_end = datetime.utcnow()
 
-            print(f"   🔍 Verification: {'✅ PASSED' if is_valid else '❌ FAILED'}")
+            logger.info("artifact_verification", is_valid=is_valid)
 
             trace["steps"].append({
                 "step": "verify_result",
@@ -379,10 +383,10 @@ class GoalExecutorV2:
                     **artifact_data
                 )
                 registered_artifacts.append(registered)
-                print(f"   ✅ Artifact registered: {artifact.type}")
+                logger.debug("artifact_registered", artifact_type=artifact.type)
 
             # Step 7: Evaluate result
-            print(f"   📊 Evaluating goal completion...")
+            logger.info("evaluating_goal_completion")
 
             evaluation_start = datetime.utcnow()
             evaluation_result = evaluation_engine.evaluate_goal(
@@ -393,8 +397,8 @@ class GoalExecutorV2:
             )
             evaluation_end = datetime.utcnow()
 
-            print(f"   📈 Evaluation: {evaluation_result.summary}")
-            print(f"   🎯 Confidence: {evaluation_result.confidence*100:.0f}%")
+            logger.info("evaluation_result", summary=evaluation_result.summary)
+            logger.info("evaluation_confidence", confidence=f"{evaluation_result.confidence*100:.0f}%")
 
             # Record evaluation in trace
             trace["steps"].append({
@@ -449,7 +453,7 @@ class GoalExecutorV2:
                     actor="goal_executor_v2"
                 )
 
-                print(f"   ✅ GOAL COMPLETED")
+                logger.info("goal_completed", goal_id=str(goal.id))
 
                 # Phase 2.5.P: Post-completion hook (observer + reflection)
                 try:
@@ -464,7 +468,7 @@ class GoalExecutorV2:
                     )
                 except Exception as e:
                     # Log but don't fail (already marked as done)
-                    print(f"   ⚠️  Post-completion hook error: {e}")
+                    logger.warning("post_completion_hook_error", error=str(e))
 
             else:
                 to_state = "incomplete" if evaluation_result.confidence > 0.3 else "blocked"
@@ -477,7 +481,7 @@ class GoalExecutorV2:
                     actor="goal_executor_v2"
                 )
 
-                print(f"   ⚠️  GOAL {to_state.upper()}")
+                logger.warning("goal_state_changed", new_state=to_state.upper())
 
                 # Phase 2.5.P: Hook on incomplete goal
                 try:
@@ -492,7 +496,7 @@ class GoalExecutorV2:
                     )
                 except Exception as e:
                     # Log but don't fail
-                    print(f"   ⚠️  Incomplete hook error: {e}")
+                    logger.warning("incomplete_hook_error", error=str(e))
 
             # Finalize trace
             execution_end = datetime.utcnow()
@@ -522,7 +526,7 @@ class GoalExecutorV2:
                                 preview = f.read(500)
                                 artifact_with_preview["content_preview"] = preview
                     except Exception as e:
-                        print(f"   ⚠️ Failed to read preview: {e}")
+                        logger.warning("preview_read_failed", error=str(e))
                         artifact_with_preview["content_preview"] = None
                 artifacts_with_preview.append(artifact_with_preview)
 
@@ -541,9 +545,7 @@ class GoalExecutorV2:
             }
 
         except Exception as e:
-            print(f"   ❌ Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error("execution_error", error=str(e), exc_info=True)
 
             await transition_service.transition(
                 uow=uow,
@@ -634,7 +636,7 @@ class GoalExecutorV2:
         for capability in capabilities:
             skills = skill_registry.find_by_capability(capability)
             if skills:
-                print(f"   ✓ Found skill by capability: {capability}")
+                logger.debug("skill_found_by_capability", capability=capability)
                 return skills[0]
 
         # 🔑 PRIORITY 2: Check if we need to GENERATE new skill
@@ -643,8 +645,8 @@ class GoalExecutorV2:
         is_complex_goal = has_research or has_knowledge
 
         if is_complex_goal:
-            print(f"   ⚠️  No suitable skill found in registry")
-            print(f"   🤖 Complex goal detected - attempting auto-generation...")
+            logger.warning("no_suitable_skill_found")
+            logger.info("complex_goal_detected_attempting_generation")
 
             try:
                 from skill_generator import skill_generator
@@ -663,24 +665,22 @@ class GoalExecutorV2:
                     new_skill = skill_registry.get(skill_id)
 
                     if new_skill:
-                        print(f"   ✅ Auto-generated skill: {skill_id}")
+                        logger.info("auto_generated_skill", skill_id=skill_id)
                         return new_skill
                     else:
-                        print(f"   ⚠️  Skill generated but not found in registry")
+                        logger.warning("skill_generated_not_found_in_registry")
                 else:
-                    print(f"   ❌ Skill generation failed: {generation_result.get('error')}")
+                    logger.error("skill_generation_failed", error=generation_result.get('error'))
 
             except Exception as e:
-                print(f"   ❌ Skill generation error: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error("skill_generation_error", error=str(e), exc_info=True)
 
         # 🔑 PRIORITY 3: Simple artifact type match
         for artifact_type in artifacts:
             if artifact_type in ["FILE", "KNOWLEDGE", "DATASET"]:
                 skills = skill_registry.find_by_artifact(artifact_type.lower())
                 if skills:
-                    print(f"   ✓ Found skill by artifact type: {artifact_type}")
+                    logger.debug("skill_found_by_artifact_type", artifact_type=artifact_type)
                     return skills[0]
 
         # 🔑 PRIORITY 4: Fallbacks
@@ -722,11 +722,11 @@ Format: Markdown"""
             )
 
             content = response["choices"][0]["message"]["content"].strip()
-            print(f"   ✅ LLM generated {len(content)} chars of content")
+            logger.info("llm_content_generated", chars=len(content))
             return content
 
         except Exception as e:
-            print(f"   ⚠️ LLM generation failed: {e}, using fallback")
+            logger.warning("llm_generation_failed_using_fallback", error=str(e))
             # Fallback to basic template
             return f"""# {goal.title}
 
@@ -752,7 +752,7 @@ Format: Markdown"""
             filename = f"{goal.title.lower().replace(' ', '_')}.md"
 
             # Generate content using LLM
-            print(f"   🤖 Generating content with LLM for: {goal.title}")
+            logger.info("generating_content_with_llm", goal_title=goal.title)
             text = await self._generate_content_with_llm(goal)
 
             import os
