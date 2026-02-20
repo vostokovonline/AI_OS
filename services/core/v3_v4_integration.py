@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 v3/v4 Integration Example - MemorySignal в реальном executor
 
@@ -102,7 +105,7 @@ class V3ExecutorWithV4Memory:
             error=error
         )
 
-        print(f"✅ Generated memory signals for failure: {skill_name}")
+        logger.info(f"✅ Generated memory signals for failure: {skill_name}")
 
     def handle_high_cost(
         self,
@@ -120,7 +123,7 @@ class V3ExecutorWithV4Memory:
         )
 
         if signal:
-            print(f"✅ Generated high_cost signal: {skill_name} (ratio: {actual_cost/expected_cost:.2f})")
+            logger.info(f"✅ Generated high_cost signal: {skill_name} (ratio: {actual_cost/expected_cost:.2f})")
 
     def handle_manual_override(
         self,
@@ -135,7 +138,7 @@ class V3ExecutorWithV4Memory:
             override_type=override_type
         )
 
-        print(f"✅ Generated manual_override signal: {goal_id}")
+        logger.info(f"✅ Generated manual_override signal: {goal_id}")
 
     def decay_memory(self):
         """
@@ -147,7 +150,7 @@ class V3ExecutorWithV4Memory:
         decay_memory_signals(self.memory_registry)
 
         summary = self.memory_registry.summary()
-        print(f"📊 Memory signals: {summary['total_signals']} active")
+        logger.info(f"📊 Memory signals: {summary['total_signals']} active")
 
 
 # ============================================================================
@@ -161,7 +164,7 @@ def example_usage():
     executor = V3ExecutorWithV4Memory()
 
     # === Шаг 1: Подготовка контекста ===
-    print("\n=== Шаг 1: Prepare execution context ===")
+    logger.info("\n=== Шаг 1: Prepare execution context ===")
     ctx = executor.prepare_execution_context(
         goal_title="Explore atmospheric electricity",
         goal_priority="high",
@@ -169,15 +172,15 @@ def example_usage():
         pressure_magnitude=0.7
     )
 
-    print(f"Execution bias:")
-    print(f"  Prefer skills: {ctx['prefer_skills']}")
-    print(f"  Avoid skills: {ctx['avoid_skills']}")
-    print(f"  Depth: {ctx['depth']}")
-    print(f"  Speed: {ctx['speed']}")
-    print(f"  LLM profile: {ctx['llm_profile']}")
+    logger.info(f"Execution bias:")
+    logger.info(f"  Prefer skills: {ctx['prefer_skills']}")
+    logger.info(f"  Avoid skills: {ctx['avoid_skills']}")
+    logger.info(f"  Depth: {ctx['depth']}")
+    logger.info(f"  Speed: {ctx['speed']}")
+    logger.info(f"  LLM profile: {ctx['llm_profile']}")
 
     # === Шаг 2: Симуляция ошибки ===
-    print("\n=== Шаг 2: Handle failure ===")
+    logger.info("\n=== Шаг 2: Handle failure ===")
     executor.handle_execution_failure(
         skill_name="web_research",
         error="timeout after 120s",
@@ -185,7 +188,7 @@ def example_usage():
     )
 
     # === Шаг 3: Симуляция перерасхода ===
-    print("\n=== Шаг 3: Handle high cost ===")
+    logger.info("\n=== Шаг 3: Handle high cost ===")
     executor.handle_high_cost(
         skill_name="deep_analysis",
         actual_cost=150.0,
@@ -193,23 +196,23 @@ def example_usage():
     )
 
     # === Шаг 4: Decay ===
-    print("\n=== Шаг 4: Decay memory ===")
+    logger.info("\n=== Шаг 4: Decay memory ===")
     executor.decay_memory()
 
     # === Шаг 5: Следующий цикл - bias изменился! ===
-    print("\n=== Шаг 5: Next cycle - bias influenced by memory ===")
+    logger.info("\n=== Шаг 5: Next cycle - bias influenced by memory ===")
     ctx2 = executor.prepare_execution_context(
         goal_title="Explore atmospheric electricity",
         goal_priority="high"
     )
 
-    print(f"NEW Execution bias (influenced by memory):")
-    print(f"  Prefer skills: {ctx2['prefer_skills']}")
-    print(f"  Avoid skills: {ctx2['avoid_skills']}")
-    print(f"  Depth: {ctx2['depth']}")
-    print(f"  Speed: {ctx2['speed']}")
+    logger.info(f"NEW Execution bias (influenced by memory):")
+    logger.info(f"  Prefer skills: {ctx2['prefer_skills']}")
+    logger.info(f"  Avoid skills: {ctx2['avoid_skills']}")
+    logger.info(f"  Depth: {ctx2['depth']}")
+    logger.info(f"  Speed: {ctx2['speed']}")
 
-    print("\n✅ Memory affected the bias!")
+    logger.info("\n✅ Memory affected the bias!")
 
 
 # ============================================================================
@@ -233,12 +236,12 @@ def test_memory_signal():
     registry.add(signal)
 
     assert len(registry.get_active()) == 1
-    print("✅ MemorySignal created and added")
+    logger.info("✅ MemorySignal created and added")
 
     # Decay
     signal.decay()
     assert signal.ttl == 4
-    print("✅ MemorySignal decay works")
+    logger.info("✅ MemorySignal decay works")
 
     # Полный decay
     for _ in range(4):
@@ -246,7 +249,7 @@ def test_memory_signal():
 
     assert signal.is_expired()
     assert len(registry.get_active()) == 0
-    print("✅ MemorySignal expired and removed")
+    logger.info("✅ MemorySignal expired and removed")
 
 
 def test_decision_field():
@@ -275,9 +278,9 @@ def test_decision_field():
 
     assert bias.depth == "shallow"  # Высокое давление
     assert "analyze" in bias.prefer_skills or "explore" in bias.prefer_skills
-    print("✅ DecisionField works")
-    print(f"  Depth: {bias.depth}")
-    print(f"  LLM profile: {bias.llm_profile}")
+    logger.info("✅ DecisionField works")
+    logger.info(f"  Depth: {bias.depth}")
+    logger.info(f"  LLM profile: {bias.llm_profile}")
 
 
 def test_memory_bias():
@@ -308,9 +311,9 @@ def test_memory_bias():
         )
     )
 
-    print(f"\nBias WITHOUT memory:")
-    print(f"  Prefer: {bias_no_memory.prefer_skills}")
-    print(f"  Avoid: {bias_no_memory.avoid_skills}")
+    logger.info(f"\nBias WITHOUT memory:")
+    logger.info(f"  Prefer: {bias_no_memory.prefer_skills}")
+    logger.info(f"  Avoid: {bias_no_memory.avoid_skills}")
 
     # Добавляем memory: web_research failed
     registry.add(MemorySignal(
@@ -329,10 +332,10 @@ def test_memory_bias():
         )
     )
 
-    print(f"\nBias WITH memory (web_research failed):")
-    print(f"  Prefer: {bias_with_memory.prefer_skills}")
-    print(f"  Avoid: {bias_with_memory.avoid_skills}")
-    print(f"  Risk tolerance: {bias_with_memory.risk_tolerance:.2f}")
+    logger.info(f"\nBias WITH memory (web_research failed):")
+    logger.info(f"  Prefer: {bias_with_memory.prefer_skills}")
+    logger.info(f"  Avoid: {bias_with_memory.avoid_skills}")
+    logger.info(f"  Risk tolerance: {bias_with_memory.risk_tolerance:.2f}")
 
     # Проверяем что web_research был удален из prefer
     assert "web_research" not in bias_with_memory.prefer_skills, \
@@ -344,22 +347,22 @@ def test_memory_bias():
     assert bias_with_memory.risk_tolerance < bias_no_memory.risk_tolerance, \
         "Risk tolerance should decrease after failure"
 
-    print("✅ Memory successfully affected bias")
+    logger.info("✅ Memory successfully affected bias")
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("MemorySignal v4 - Integration Tests")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("MemorySignal v4 - Integration Tests")
+    logger.info("=" * 60)
 
     test_memory_signal()
     test_decision_field()
     test_memory_bias()
 
-    print("\n" + "=" * 60)
-    print("EXAMPLE: Real-world usage")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("EXAMPLE: Real-world usage")
+    logger.info("=" * 60)
 
     example_usage()
 
-    print("\n✅ All tests passed!")
+    logger.info("\n✅ All tests passed!")

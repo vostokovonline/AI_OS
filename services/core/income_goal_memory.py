@@ -11,18 +11,23 @@ from decision_field import DecisionField, DecisionFieldInput, GoalPressure, Exec
 from datetime import datetime
 import json
 
+# Centralized logging
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def example_income_goal_strategy():
     """
     Пример адаптации стратегии получения дохода с помощью MemorySignal.
     """
-    print("=" * 70)
-    print("MemorySignal v4 - Income Goal Strategy Adaptation")
-    print("=" * 70)
+    logger.info("separator_70")
+    logger.info("memory_signal_income_goal_demo")
+    logger.info("separator_70")
 
     # === Шаг 1: Начальная стратегия ===
-    print("\n📍 Шаг 1: Initial Strategy (No Memory)")
-    print("-" * 70)
+    logger.info("step_1_initial_strategy")
+    logger.info("separator_dash_70")
 
     initial_goal = GoalPressure(
         goal_id="income_goal",
@@ -46,15 +51,15 @@ def example_income_goal_strategy():
         )
     )
 
-    print(f"Initial execution bias:")
-    print(f"  Prefer: {initial_bias.prefer_skills}")
-    print(f"  Avoid: {initial_bias.avoid_skills}")
-    print(f"  Depth: {initial_bias.depth}")
-    print(f"  LLM profile: {initial_bias.llm_profile}")
+    logger.info(f"Initial execution bias:")
+    logger.info(f"  Prefer: {initial_bias.prefer_skills}")
+    logger.info(f"  Avoid: {initial_bias.avoid_skills}")
+    logger.info(f"  Depth: {initial_bias.depth}")
+    logger.info(f"  LLM profile: {initial_bias.llm_profile}")
 
     # === Шаг 2: Провал - costly MVP development ===
-    print("\n💥 Шаг 2: Failure - High Cost MVP Development")
-    print("-" * 70)
+    logger.info("\n💥 Шаг 2: Failure - High Cost MVP Development")
+    logger.info("separator_dash_70")
 
     # Симулируем ошибку: MVP обошёлся слишком дорого
     memory_generator.from_high_cost(
@@ -64,14 +69,14 @@ def example_income_goal_strategy():
         threshold=2.0
     )
 
-    print("Generated MemorySignal: high_cost_low_gain")
-    print("  Target: MVP development")
-    print("  Actual cost: 500h vs Expected: 100h")
-    print("  Effect: System will prefer cheaper strategies")
+    logger.info("Generated MemorySignal: high_cost_low_gain")
+    logger.info("  Target: MVP development")
+    logger.info("  Actual cost: 500h vs Expected: 100h")
+    logger.info("  Effect: System will prefer cheaper strategies")
 
     # === Шаг 3: Стратегия адаптировалась ===
-    print("\n🔄 Шаг 3: Strategy Adapted (With Memory)")
-    print("-" * 70)
+    logger.info("\n🔄 Шаг 3: Strategy Adapted (With Memory)")
+    logger.info("separator_dash_70")
 
     adapted_bias = DecisionField.evaluate(
         DecisionFieldInput(
@@ -82,16 +87,16 @@ def example_income_goal_strategy():
         )
     )
 
-    print(f"Adapted execution bias:")
-    print(f"  Prefer: {adapted_bias.prefer_skills}")
-    print(f"  Avoid: {adapted_bias.avoid_skills}")
-    print(f"  Depth: {adapted_bias.depth} (было {initial_bias.depth})")
-    print(f"  Speed: {adapted_bias.speed} (было {initial_bias.speed})")
-    print(f"  LLM profile: {adapted_bias.llm_profile} (было {initial_bias.llm_profile})")
+    logger.info(f"Adapted execution bias:")
+    logger.info(f"  Prefer: {adapted_bias.prefer_skills}")
+    logger.info(f"  Avoid: {adapted_bias.avoid_skills}")
+    logger.info(f"  Depth: {adapted_bias.depth} (было {initial_bias.depth})")
+    logger.info(f"  Speed: {adapted_bias.speed} (было {initial_bias.speed})")
+    logger.info(f"  LLM profile: {adapted_bias.llm_profile} (было {initial_bias.llm_profile})")
 
     # === Шаг 4: Ещё один провал - sales failed ===
-    print("\n💥 Шаг 4: Another Failure - Sales Approach Failed")
-    print("-" * 70)
+    logger.info("\n💥 Шаг 4: Another Failure - Sales Approach Failed")
+    logger.info("separator_dash_70")
 
     memory_generator.from_executor_failure(
         skill_name="cold_sales",
@@ -99,13 +104,13 @@ def example_income_goal_strategy():
         error_type="low_conversion"
     )
 
-    print("Generated MemorySignal: recent_failure")
-    print("  Target: cold_sales")
-    print("  Effect: System will avoid aggressive sales")
+    logger.info("Generated MemorySignal: recent_failure")
+    logger.info("  Target: cold_sales")
+    logger.info("  Effect: System will avoid aggressive sales")
 
     # === Шаг 5: Стратегия снова адаптировалась ===
-    print("\n🔄 Шаг 5: Strategy Re-Adapted (With 2 Memories)")
-    print("-" * 70)
+    logger.info("\n🔄 Шаг 5: Strategy Re-Adapted (With 2 Memories)")
+    logger.info("separator_dash_70")
 
     re_adapted_bias = DecisionField.evaluate(
         DecisionFieldInput(
@@ -116,16 +121,16 @@ def example_income_goal_strategy():
         )
     )
 
-    print(f"Re-adapted execution bias:")
-    print(f"  Prefer: {re_adapted_bias.prefer_skills}")
-    print(f"  Avoid: {re_adapted_bias.avoid_skills}")
-    print(f"  Depth: {re_adapted_bias.depth}")
-    print(f"  Speed: {re_adapted_bias.speed}")
-    print(f"  Risk tolerance: {re_adapted_bias.risk_tolerance:.2f}")
+    logger.info(f"Re-adapted execution bias:")
+    logger.info(f"  Prefer: {re_adapted_bias.prefer_skills}")
+    logger.info(f"  Avoid: {re_adapted_bias.avoid_skills}")
+    logger.info(f"  Depth: {re_adapted_bias.depth}")
+    logger.info(f"  Speed: {re_adapted_bias.speed}")
+    logger.info(f"  Risk tolerance: {re_adapted_bias.risk_tolerance:.2f}")
 
     # === Шаг 6: Decay и восстановление ===
-    print("\n⏳ Шаг 6: Memory Decay and Recovery")
-    print("-" * 70)
+    logger.info("\n⏳ Шаг 6: Memory Decay and Recovery")
+    logger.info("separator_dash_70")
 
     # Симулируем 5 циклов планирования
     from decision_field import decay_memory_signals
@@ -133,7 +138,7 @@ def example_income_goal_strategy():
     for i in range(5):
         decay_memory_signals(memory_registry)
         summary = memory_registry.summary()
-        print(f"  Cycle {i+1}: {summary['total_signals']} active signals")
+        logger.info(f"  Cycle {i+1}: {summary['total_signals']} active signals")
 
     # После decay стратегия становится менее консервативной
     final_bias = DecisionField.evaluate(
@@ -145,16 +150,16 @@ def example_income_goal_strategy():
         )
     )
 
-    print(f"\nFinal execution bias (after memory decay):")
-    print(f"  Prefer: {final_bias.prefer_skills}")
-    print(f"  Depth: {final_bias.depth}")
-    print(f"  Risk tolerance: {final_bias.risk_tolerance:.2f}")
+    logger.info(f"\nFinal execution bias (after memory decay):")
+    logger.info(f"  Prefer: {final_bias.prefer_skills}")
+    logger.info(f"  Depth: {final_bias.depth}")
+    logger.info(f"  Risk tolerance: {final_bias.risk_tolerance:.2f}")
 
     # === Итоги ===
-    print("\n" + "=" * 70)
-    print("📊 RESULTS: Strategy Adaptation Summary")
-    print("=" * 70)
-    print("""
+    logger.info("\n" + "=" * 70)
+    logger.info("📊 RESULTS: Strategy Adaptation Summary")
+    logger.info("separator_70")
+    logger.info("""
 ✅ WITHOUT MemorySignal:
    - System repeats same expensive mistakes
    - Needs manual code changes to adapt
@@ -173,9 +178,9 @@ def example_integration_with_goal_executor():
     """
     Пример интеграции MemorySignal с GoalExecutor.
     """
-    print("\n" + "=" * 70)
-    print("Real Integration Example: GoalExecutor + MemorySignal")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info("Real Integration Example: GoalExecutor + MemorySignal")
+    logger.info("separator_70")
 
     # Импортируем (в реальном коде это будет в начале файла)
     from v3_v4_integration import V3ExecutorWithV4Memory
@@ -183,8 +188,8 @@ def example_integration_with_goal_executor():
     executor = V3ExecutorWithV4Memory()
 
     # === Пример 1: Подготовка контекста для выполнения цели ===
-    print("\n📋 Example 1: Prepare execution context")
-    print("-" * 70)
+    logger.info("\n📋 Example 1: Prepare execution context")
+    logger.info("separator_dash_70")
 
     ctx = executor.prepare_execution_context(
         goal_title="Найти первых-paying клиентов",
@@ -193,13 +198,13 @@ def example_integration_with_goal_executor():
         pressure_magnitude=0.7
     )
 
-    print(f"Execution context prepared with bias:")
-    print(f"  Prefer skills: {ctx['prefer_skills']}")
-    print(f"  Depth: {ctx['depth']}")
+    logger.info(f"Execution context prepared with bias:")
+    logger.info(f"  Prefer skills: {ctx['prefer_skills']}")
+    logger.info(f"  Depth: {ctx['depth']}")
 
     # === Пример 2: Обработка ошибки при выполнении ===
-    print("\n❌ Example 2: Handle execution failure")
-    print("-" * 70)
+    logger.info("\n❌ Example 2: Handle execution failure")
+    logger.info("separator_dash_70")
 
     executor.handle_execution_failure(
         skill_name="cold_outreach",
@@ -208,33 +213,33 @@ def example_integration_with_goal_executor():
     )
 
     # === Пример 3: Проверка влияния на следующий цикл ===
-    print("\n🔄 Example 3: Next cycle - memory affected bias")
-    print("-" * 70)
+    logger.info("\n🔄 Example 3: Next cycle - memory affected bias")
+    logger.info("separator_dash_70")
 
     ctx_after = executor.prepare_execution_context(
         goal_title="Найти первых-paying клиентов",
         goal_priority="high"
     )
 
-    print(f"New execution context (influenced by memory):")
-    print(f"  Avoid skills: {ctx_after['avoid_skills']}")
-    print(f"  Risk tolerance: {ctx_after['risk_tolerance']:.2f}")
+    logger.info(f"New execution context (influenced by memory):")
+    logger.info(f"  Avoid skills: {ctx_after['avoid_skills']}")
+    logger.info(f"  Risk tolerance: {ctx_after['risk_tolerance']:.2f}")
 
     # === Пример 4: Ручной override пользователя ===
-    print("\n👤 Example 4: Manual override by user")
-    print("-" * 70)
+    logger.info("\n👤 Example 4: Manual override by user")
+    logger.info("separator_dash_70")
 
     executor.handle_manual_override(
         goal_id="3b7c1939-9c5c-4f62-99e7-b790ea569a41",  # L2 goal
         override_type="block"  # Пользователь заблокировал направление
     )
 
-    print("Generated MemorySignal: false_success")
-    print("  Effect: System will be more cautious with similar goals")
+    logger.info("Generated MemorySignal: false_success")
+    logger.info("  Effect: System will be more cautious with similar goals")
 
     # === Пример 5: Decay памяти ===
-    print("\n⏳ Example 5: Memory decay")
-    print("-" * 70)
+    logger.info("\n⏳ Example 5: Memory decay")
+    logger.info("separator_dash_70")
 
     executor.decay_memory()
 
@@ -243,45 +248,45 @@ def generate_real_world_signals():
     """
     Генерирует реальные MemorySignal для текущих целей.
     """
-    print("\n" + "=" * 70)
-    print("Generating Real-World Memory Signals for Income Goals")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info("Generating Real-World Memory Signals for Income Goals")
+    logger.info("separator_70")
 
     # Симулируем несколько реальных сценариев
 
     # Сценарий 1: Провал "Изучить конкурентов" - слишком дорого
-    print("\n💡 Scenario 1: Expensive market research")
+    logger.info("\n💡 Scenario 1: Expensive market research")
     memory_generator.from_high_cost(
         skill_name="deep_market_research",
         actual_cost=80.0,  # часов
         expected_cost=20.0,
         threshold=2.0
     )
-    print("✅ Signal generated: high_cost_low_gain")
-    print("   → Future: System will prefer shallow analysis")
+    logger.info("✅ Signal generated: high_cost_low_gain")
+    logger.info("   → Future: System will prefer shallow analysis")
 
     # Сценарий 2: Провал "Написать код MVP" - технические проблемы
-    print("\n💡 Scenario 2: Technical failure in MVP development")
+    logger.info("\n💡 Scenario 2: Technical failure in MVP development")
     memory_generator.from_executor_failure(
         skill_name="MVP_development",
         error="Integration issues with payment API",
         error_type="technical"
     )
-    print("✅ Signal generated: recent_failure")
-    print("   → Future: System will avoid similar technical tasks")
+    logger.info("✅ Signal generated: recent_failure")
+    logger.info("   → Future: System will avoid similar technical tasks")
 
     # Сценарий 3: Успех "Создать лендинг" - но конверсия низкая
-    print("\n💡 Scenario 3: False success - landing created but no sales")
+    logger.info("\n💡 Scenario 3: False success - landing created but no sales")
     memory_generator.from_manual_override(
         target="landing_page_optimization",
         override_type="force_complete"
     )
-    print("✅ Signal generated: false_success")
-    print("   → Future: System will be less aggressive with optimization")
+    logger.info("✅ Signal generated: false_success")
+    logger.info("   → Future: System will be less aggressive with optimization")
 
-    print("\n" + "=" * 70)
-    print("📊 Current Memory State:")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info("📊 Current Memory State:")
+    logger.info("separator_70")
 
     summary = memory_registry.summary()
     # Convert datetime objects to strings for JSON serialization
@@ -289,7 +294,7 @@ def generate_real_world_signals():
         k: v.isoformat() if isinstance(v, datetime) else v
         for k, v in summary.items()
     }
-    print(json.dumps(summary_serializable, indent=2))
+    logger.info(json.dumps(summary_serializable, indent=2))
 
 
 if __name__ == "__main__":
@@ -298,8 +303,8 @@ if __name__ == "__main__":
     example_integration_with_goal_executor()
     generate_real_world_signals()
 
-    print("\n✅ All examples completed!")
-    print("\n💡 Key Takeaway:")
-    print("   MemorySignal позволяет системе АВТОМАТИЧЕСКИ адаптироваться")
-    print("   к ошибкам без изменения кода.")
-    print("   Это обучение без обучения - рефлекс, а не интеллект.")
+    logger.info("\n✅ All examples completed!")
+    logger.info("\n💡 Key Takeaway:")
+    logger.info("   MemorySignal позволяет системе АВТОМАТИЧЕСКИ адаптироваться")
+    logger.info("   к ошибкам без изменения кода.")
+    logger.info("   Это обучение без обучения - рефлекс, а не интеллект.")

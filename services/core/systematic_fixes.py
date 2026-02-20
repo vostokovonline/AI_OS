@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 SYSTEMATIC FIXES - Master script for fixing stuck goals
 ========================================================
@@ -22,64 +25,64 @@ from datetime import datetime
 async def run_all_fixes():
     """Запускает все исправления последовательно"""
 
-    print("\n" + "="*70)
-    print("SYSTEMATIC FIXES FOR STUCK GOALS")
-    print("="*70)
-    print(f"\nStarted at: {datetime.now().isoformat()}")
+    logger.info("\n" + "="*70)
+    logger.info("SYSTEMATIC FIXES FOR STUCK GOALS")
+    logger.info("="*70)
+    logger.info(f"\nStarted at: {datetime.now().isoformat()}")
 
     # =============================================================================
     # FIX 1: Auto-decompose pending non-atomic goals
     # =============================================================================
-    print("\n" + "-"*70)
-    print("FIX 1/3: AUTO-DECOMPOSE PENDING NON-ATOMIC GOALS")
-    print("-"*70)
+    logger.info("\n" + "-"*70)
+    logger.info("FIX 1/3: AUTO-DECOMPOSE PENDING NON-ATOMIC GOALS")
+    logger.info("-"*70)
 
     try:
         from auto_decomposer import auto_decomposer
 
         report1 = await auto_decomposer.decompose_all_pending_non_atomic()
 
-        print(f"\n✅ Decompose report:")
-        print(f"   Total pending: {report1['total']}")
-        print(f"   Decomposed: {report1['decomposed']}")
-        print(f"   Skipped: {report1['skipped']}")
-        print(f"   Failed: {report1['failed']}")
+        logger.info(f"\n✅ Decompose report:")
+        logger.info(f"   Total pending: {report1['total']}")
+        logger.info(f"   Decomposed: {report1['decomposed']}")
+        logger.info(f"   Skipped: {report1['skipped']}")
+        logger.info(f"   Failed: {report1['failed']}")
 
     except Exception as e:
-        print(f"\n❌ DECOMPOSE ERROR: {e}")
+        logger.info(f"\n❌ DECOMPOSE ERROR: {e}")
         import traceback
         traceback.print_exc()
 
     # =============================================================================
     # FIX 2: Recalculate parent progress
     # =============================================================================
-    print("\n" + "-"*70)
-    print("FIX 2/3: RECALCULATE PARENT PROGRESS")
-    print("-"*70)
+    logger.info("\n" + "-"*70)
+    logger.info("FIX 2/3: RECALCULATE PARENT PROGRESS")
+    logger.info("-"*70)
 
     try:
         from parent_progress_aggregator import parent_progress_aggregator
 
         report2 = await parent_progress_aggregator.recalculate_all_parents()
 
-        print(f"\n✅ Progress aggregation report:")
-        print(f"   Total parents: {report2['total_parents']}")
-        print(f"   Updated: {report2['updated']}")
-        print(f"   Completed: {report2['completed']}")
-        print(f"   Activated: {report2['activated']}")
-        print(f"   Errors: {report2['errors']}")
+        logger.info(f"\n✅ Progress aggregation report:")
+        logger.info(f"   Total parents: {report2['total_parents']}")
+        logger.info(f"   Updated: {report2['updated']}")
+        logger.info(f"   Completed: {report2['completed']}")
+        logger.info(f"   Activated: {report2['activated']}")
+        logger.info(f"   Errors: {report2['errors']}")
 
     except Exception as e:
-        print(f"\n❌ PROGRESS ERROR: {e}")
+        logger.info(f"\n❌ PROGRESS ERROR: {e}")
         import traceback
         traceback.print_exc()
 
     # =============================================================================
     # FIX 3: Fix ontology violations (SQL)
     # =============================================================================
-    print("\n" + "-"*70)
-    print("FIX 3/3: FIX ONTOLOGY VIOLATIONS (SQL)")
-    print("-"*70)
+    logger.info("\n" + "-"*70)
+    logger.info("FIX 3/3: FIX ONTOLOGY VIOLATIONS (SQL)")
+    logger.info("-"*70)
 
     try:
         import subprocess
@@ -89,47 +92,47 @@ async def run_all_fixes():
         container_sql_path = "/tmp/fix_ontology_violations.sql"
 
         if not os.path.exists(sql_path):
-            print(f"⚠️  SQL file not found: {sql_path}")
+            logger.info(f"⚠️  SQL file not found: {sql_path}")
         else:
             # Copy SQL to container
-            print(f"\n📋 Copying SQL to container...")
+            logger.info(f"\n📋 Copying SQL to container...")
             result = subprocess.run([
                 "docker", "cp", sql_path, "ns_postgres:/tmp/fix_ontology_violations.sql"
             ], capture_output=True, text=True)
 
             if result.returncode != 0:
-                print(f"❌ Copy failed: {result.stderr}")
+                logger.info(f"❌ Copy failed: {result.stderr}")
             else:
-                print("✅ SQL copied")
+                logger.info("✅ SQL copied")
 
                 # Execute SQL
-                print("\n🔧 Executing SQL fix...")
+                logger.info("\n🔧 Executing SQL fix...")
                 result = subprocess.run([
                     "docker", "exec", "ns_postgres",
                     "psql", "-U", "ns_admin", "-d", "ns_core_db",
                     "-f", "/tmp/fix_ontology_violations.sql"
                 ], capture_output=True, text=True)
 
-                print(result.stdout)
+                logger.info(result.stdout)
                 if result.stderr:
-                    print(f"⚠️  SQL warnings: {result.stderr}")
+                    logger.info(f"⚠️  SQL warnings: {result.stderr}")
 
                 if result.returncode == 0:
-                    print("\n✅ Ontology violations fixed!")
+                    logger.info("\n✅ Ontology violations fixed!")
                 else:
-                    print(f"\n❌ SQL execution failed (code {result.returncode})")
+                    logger.info(f"\n❌ SQL execution failed (code {result.returncode})")
 
     except Exception as e:
-        print(f"\n❌ SQL ERROR: {e}")
+        logger.info(f"\n❌ SQL ERROR: {e}")
         import traceback
         traceback.print_exc()
 
     # =============================================================================
     # VERIFY: Show final statistics
     # =============================================================================
-    print("\n" + "="*70)
-    print("VERIFICATION: FINAL STATISTICS")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info("VERIFICATION: FINAL STATISTICS")
+    logger.info("="*70)
 
     try:
         import subprocess
@@ -142,8 +145,8 @@ async def run_all_fixes():
             "-c", "SELECT status, COUNT(*) FROM goals GROUP BY status ORDER BY status;"
         ], capture_output=True, text=True)
 
-        print("\n📊 Goals by status:")
-        print(result.stdout)
+        logger.info("\n📊 Goals by status:")
+        logger.info(result.stdout)
 
         # Get ontology check
         result = subprocess.run([
@@ -161,26 +164,26 @@ async def run_all_fixes():
             """
         ], capture_output=True, text=True)
 
-        print("\n📊 Ontology compliance (continuous/directional):")
-        print(result.stdout)
+        logger.info("\n📊 Ontology compliance (continuous/directional):")
+        logger.info(result.stdout)
 
     except Exception as e:
-        print(f"\n❌ VERIFICATION ERROR: {e}")
+        logger.info(f"\n❌ VERIFICATION ERROR: {e}")
 
     # =============================================================================
     # DONE
     # =============================================================================
-    print("\n" + "="*70)
-    print("SYSTEMATIC FIXES COMPLETED")
-    print("="*70)
-    print(f"\nCompleted at: {datetime.now().isoformat()}")
+    logger.info("\n" + "="*70)
+    logger.info("SYSTEMATIC FIXES COMPLETED")
+    logger.info("="*70)
+    logger.info(f"\nCompleted at: {datetime.now().isoformat()}")
 
-    print("\n📋 NEXT STEPS:")
-    print("1. Verify goals are decomposing correctly")
-    print("2. Verify parent progress is updating")
-    print("3. Verify no continuous/directional marked as 'done'")
-    print("4. Monitor for 24-48 hours")
-    print("5. Then enable Phase 2 (Velocity Engine + Drift Detector)")
+    logger.info("\n📋 NEXT STEPS:")
+    logger.info("1. Verify goals are decomposing correctly")
+    logger.info("2. Verify parent progress is updating")
+    logger.info("3. Verify no continuous/directional marked as 'done'")
+    logger.info("4. Monitor for 24-48 hours")
+    logger.info("5. Then enable Phase 2 (Velocity Engine + Drift Detector)")
 
 
 if __name__ == "__main__":
