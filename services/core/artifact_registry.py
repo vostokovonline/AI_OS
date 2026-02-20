@@ -171,7 +171,7 @@ class ArtifactRegistry:
                 artifact.verification_results = verification_results["results"]
                 await uow.session.flush()
             except Exception as e:
-                print(f"❌ Verification error: {e}")
+                logger.info(f"❌ Verification error: {e}")
                 pass
 
         description = None
@@ -186,7 +186,7 @@ class ArtifactRegistry:
                         else:
                             description = first_line
             except Exception as e:
-                print(f"⚠️ Failed to generate description: {e}")
+                logger.info(f"⚠️ Failed to generate description: {e}")
                 description = None
 
         return {

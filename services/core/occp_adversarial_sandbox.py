@@ -321,7 +321,7 @@ async def test_read_only_results():
     # Result must be read-only
     assert result.success == True
     assert result.output.get("read_only") == True
-    print("✅ Read-only results test passed")
+    logger.info("✅ Read-only results test passed")
 
 
 async def test_no_state_mutation():
@@ -347,7 +347,7 @@ async def test_no_state_mutation():
     # Verify sandbox state unchanged
     assert sandbox.test_count == 1  # Only counter incremented
     assert len(sandbox.vulnerability_reports) == 0  # No persistent reports
-    print("✅ No state mutation test passed")
+    logger.info("✅ No state mutation test passed")
 
 
 async def test_resource_limits_on_adversarial():
@@ -372,16 +372,16 @@ async def test_resource_limits_on_adversarial():
 
     # Should be limited
     assert result.success == False or result.tokens_used <= sandbox.contract.max_tokens
-    print("✅ Resource limits on adversarial test passed")
+    logger.info("✅ Resource limits on adversarial test passed")
 
 
 if __name__ == "__main__":
-    print("OCCP v0.3 Adversarial Test Sandbox Tests")
-    print("=" * 50)
+    logger.info("OCCP v0.3 Adversarial Test Sandbox Tests")
+    logger.info("=" * 50)
 
     asyncio.run(test_read_only_results())
     asyncio.run(test_no_state_mutation())
     asyncio.run(test_resource_limits_on_adversarial())
 
-    print("=" * 50)
-    print("✅ All adversarial sandbox tests passed")
+    logger.info("=" * 50)
+    logger.info("✅ All adversarial sandbox tests passed")

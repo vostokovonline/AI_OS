@@ -374,9 +374,9 @@ def run_sandbox_compliance_tests():
     """
     Run all sandbox compliance tests
     """
-    print("=" * 70)
-    print("OCCP v0.3 Sandbox Compliance Tests")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("OCCP v0.3 Sandbox Compliance Tests")
+    logger.info("=" * 70)
 
     # Test classes: (display_name, actual_class_name, test_methods)
     test_classes = [
@@ -413,7 +413,7 @@ def run_sandbox_compliance_tests():
     passed_tests = 0
 
     for display_name, class_name, test_names in test_classes:
-        print(f"\n[{display_name}]")
+        logger.info(f"\n[{display_name}]")
         for test_name in test_names:
             total_tests += 1
             try:
@@ -429,21 +429,21 @@ def run_sandbox_compliance_tests():
                 else:
                     test_method()
 
-                print(f"  ✅ {test_name}")
+                logger.info(f"  ✅ {test_name}")
                 passed_tests += 1
             except Exception as e:
-                print(f"  ❌ {test_name}")
-                print(f"     {e}")
+                logger.info(f"  ❌ {test_name}")
+                logger.info(f"     {e}")
 
-    print("\n" + "=" * 70)
-    print(f"Results: {passed_tests}/{total_tests} tests passed")
+    logger.info("\n" + "=" * 70)
+    logger.info(f"Results: {passed_tests}/{total_tests} tests passed")
 
     if passed_tests == total_tests:
-        print("✅ ALL SANDBOX COMPLIANCE TESTS PASSED")
-        print("\nTrust Without Trust is ENFORCED")
+        logger.info("✅ ALL SANDBOX COMPLIANCE TESTS PASSED")
+        logger.info("\nTrust Without Trust is ENFORCED")
         return 0
     else:
-        print("⚠️  SOME TESTS FAILED")
+        logger.info("⚠️  SOME TESTS FAILED")
         return 1
 
 

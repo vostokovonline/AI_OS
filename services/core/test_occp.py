@@ -53,9 +53,9 @@ class TestMCLState(OCCPTest):
             assert "epistemic_confidence" in state, "State missing 'epistemic_confidence'"
             assert "drift_score" in state, "State missing 'drift_score'"
             assert state["cognitive_mode"] in ["exploration", "exploitation", "preservation"]
-            print(f"  ✓ Current mode: {state['cognitive_mode']}")
+            logger.info(f"  ✓ Current mode: {state['cognitive_mode']}")
         else:
-            print("  ℹ No initial MCL state (will be created on first operation)")
+            logger.info("  ℹ No initial MCL state (will be created on first operation)")
 
 
 class TestMCLSetMode(OCCPTest):
@@ -79,10 +79,10 @@ class TestMCLSetMode(OCCPTest):
         assert state["epistemic_confidence"] == 0.3, f"Expected epistemic_confidence 0.3, got {state['epistemic_confidence']}"
         assert state["risk_posture"] == "aggressive", f"Expected 'aggressive', got {state['risk_posture']}"
 
-        print(f"  ✓ Mode set to exploration")
-        print(f"    - entropy_budget: {state['entropy_budget']}")
-        print(f"    - epistemic_confidence: {state['epistemic_confidence']}")
-        print(f"    - risk_posture: {state['risk_posture']}")
+        logger.info(f"  ✓ Mode set to exploration")
+        logger.info(f"    - entropy_budget: {state['entropy_budget']}")
+        logger.info(f"    - epistemic_confidence: {state['epistemic_confidence']}")
+        logger.info(f"    - risk_posture: {state['risk_posture']}")
 
 
 class TestMCLAllowedOps(OCCPTest):
@@ -102,9 +102,9 @@ class TestMCLAllowedOps(OCCPTest):
         assert "allowed" in ops, "Operations missing 'allowed'"
         assert "forbidden" in ops, "Operations missing 'forbidden'"
 
-        print(f"  ✓ Mode: {ops['mode']}")
-        print(f"  ✓ Allowed ({len(ops['allowed'])}): {', '.join(ops['allowed'])}")
-        print(f"  ✓ Forbidden ({len(ops['forbidden'])}): {', '.join(ops['forbidden'])}")
+        logger.info(f"  ✓ Mode: {ops['mode']}")
+        logger.info(f"  ✓ Allowed ({len(ops['allowed'])}): {', '.join(ops['allowed'])}")
+        logger.info(f"  ✓ Forbidden ({len(ops['forbidden'])}): {', '.join(ops['forbidden'])}")
 
 
 class TestMCLModeRestrictions(OCCPTest):
@@ -130,7 +130,7 @@ class TestMCLModeRestrictions(OCCPTest):
             ops = data["operations"]
             assert ops["mode"] == mode, f"Expected mode {mode}, got {ops['mode']}"
 
-            print(f"  ✓ Mode '{mode}': {len(ops['allowed'])} allowed, {len(ops['forbidden'])} forbidden")
+            logger.info(f"  ✓ Mode '{mode}': {len(ops['allowed'])} allowed, {len(ops['forbidden'])} forbidden")
 
             # Verify restrictions
             if mode == "exploration":
@@ -160,11 +160,11 @@ class TestSKKernel(OCCPTest):
             assert "version" in kernel, "Kernel missing 'version'"
             assert "authority_level" in kernel, "Kernel missing 'authority_level'"
             assert "self_modifiable" in kernel, "Kernel missing 'self_modifiable'"
-            print(f"  ✓ Kernel v{kernel['version']}")
-            print(f"    - authority_level: {kernel['authority_level']}")
-            print(f"    - self_modifiable: {kernel['self_modifiable']}")
+            logger.info(f"  ✓ Kernel v{kernel['version']}")
+            logger.info(f"    - authority_level: {kernel['authority_level']}")
+            logger.info(f"    - self_modifiable: {kernel['self_modifiable']}")
         else:
-            print("  ℹ No active SK kernel")
+            logger.info("  ℹ No active SK kernel")
 
 
 class TestSKRules(OCCPTest):
@@ -180,7 +180,7 @@ class TestSKRules(OCCPTest):
         assert "rules" in data, "Response missing 'rules'"
 
         rules = data["rules"]
-        print(f"  ✓ Found {len(rules)} SK rules")
+        logger.info(f"  ✓ Found {len(rules)} SK rules")
 
         # Validate rule schema
         for rule in rules:
@@ -191,7 +191,7 @@ class TestSKRules(OCCPTest):
             assert "actions" in rule, "Rule missing 'actions'"
             assert "explanation" in rule, "Rule missing 'explanation'"
 
-            print(f"    - {rule['rule_id']}: {rule['signal_name']} {rule['operator']} {rule['threshold']}")
+            logger.info(f"    - {rule['rule_id']}: {rule['signal_name']} {rule['operator']} {rule['threshold']}")
 
 
 class TestSKRecordSignal(OCCPTest):
@@ -219,7 +219,7 @@ class TestSKRecordSignal(OCCPTest):
         assert signal["signal_name"] == "mission_drift", f"Expected 'mission_drift', got {signal['signal_name']}"
         assert signal["signal_value"] == 0.5, f"Expected 0.5, got {signal['signal_value']}"
 
-        print(f"  ✓ Signal recorded: {signal['signal_name']} = {signal['signal_value']}")
+        logger.info(f"  ✓ Signal recorded: {signal['signal_name']} = {signal['signal_value']}")
 
 
 class TestSKGetSignals(OCCPTest):
@@ -235,7 +235,7 @@ class TestSKGetSignals(OCCPTest):
         assert "signals" in data, "Response missing 'signals'"
 
         signals = data["signals"]
-        print(f"  ✓ Found {len(signals)} signals")
+        logger.info(f"  ✓ Found {len(signals)} signals")
 
         # Validate signal schema
         for signal in signals[:3]:  # Check first 3
@@ -269,7 +269,7 @@ class TestOCCPAudit(OCCPTest):
         assert "events" in data, "Response missing 'events'"
 
         events = data["events"]
-        print(f"  ✓ Found {len(events)} audit events")
+        logger.info(f"  ✓ Found {len(events)} audit events")
 
         # Validate event schema
         for event in events:
@@ -295,8 +295,8 @@ class TestOCCPInfo(OCCPTest):
         assert "version" in protocol, "Protocol missing 'version'"
         assert "components" in protocol, "Protocol missing 'components'"
 
-        print(f"  ✓ OCCP Draft {protocol['version']}")
-        print(f"  ✓ Components: {', '.join(protocol['components'].keys())}")
+        logger.info(f"  ✓ OCCP Draft {protocol['version']}")
+        logger.info(f"  ✓ Components: {', '.join(protocol['components'].keys())}")
 
         assert "mcl" in protocol["components"], "MCL not listed in components"
         assert "sk" in protocol["components"], "SK not listed in components"
@@ -329,7 +329,7 @@ class TestMCLDriftAutoTransition(OCCPTest):
         assert state["cognitive_mode"] == "preservation", f"Expected 'preservation', got {state['cognitive_mode']}"
         assert state["drift_score"] == 0.8, f"Expected drift 0.8, got {state['drift_score']}"
 
-        print(f"  ✓ Drift score 0.8 triggered auto-transition to preservation")
+        logger.info(f"  ✓ Drift score 0.8 triggered auto-transition to preservation")
 
 
 async def run_all_tests() -> Dict[str, List[OCCPTest]]:
@@ -348,36 +348,36 @@ async def run_all_tests() -> Dict[str, List[OCCPTest]]:
         TestMCLDriftAutoTransition(),
     ]
 
-    print("=" * 60)
-    print("OCCP DRAFT 0.1 COMPLIANCE TEST SUITE")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("OCCP DRAFT 0.1 COMPLIANCE TEST SUITE")
+    logger.info("=" * 60)
 
     passed = []
     failed = []
 
     for test in tests:
-        print(f"\n[TEST] {test.name}")
+        logger.info(f"\n[TEST] {test.name}")
         try:
             result = await test.run()
             if result:
                 passed.append(test)
-                print(f"  ✅ PASSED")
+                logger.info(f"  ✅ PASSED")
             else:
                 failed.append(test)
-                print(f"  ❌ FAILED: {test.error}")
+                logger.info(f"  ❌ FAILED: {test.error}")
         except Exception as e:
             failed.append(test)
             test.error = str(e)
-            print(f"  ❌ FAILED: {e}")
+            logger.info(f"  ❌ FAILED: {e}")
 
-    print("\n" + "=" * 60)
-    print(f"RESULTS: {len(passed)}/{len(tests)} passed")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info(f"RESULTS: {len(passed)}/{len(tests)} passed")
+    logger.info("=" * 60)
 
     if failed:
-        print("\n❌ FAILED TESTS:")
+        logger.info("\n❌ FAILED TESTS:")
         for test in failed:
-            print(f"  - {test.name}: {test.error}")
+            logger.info(f"  - {test.name}: {test.error}")
 
     return {"passed": passed, "failed": failed}
 

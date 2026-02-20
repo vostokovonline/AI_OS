@@ -358,7 +358,7 @@ class TrajectoryClusterer:
 
             self.clusters[action_type] = action_clusters
 
-            print(f"📊 Built {len(action_clusters)} clusters for action '{action_type}'")
+            logger.info(f"📊 Built {len(action_clusters)} clusters for action '{action_type}'")
 
     async def _kmeans_clustering(
         self,

@@ -207,8 +207,8 @@ if __name__ == "__main__":
     async def run_invariant_tests():
         test = TestGoalTypeInvariant()
 
-        print("🔍 Running Goal Type Invariant Tests...")
-        print("=" * 60)
+        logger.info("🔍 Running Goal Type Invariant Tests...")
+        logger.info("=" * 60)
 
         tests = [
             ("No goal types without contracts", test.test_no_goal_types_without_contracts),
@@ -228,21 +228,21 @@ if __name__ == "__main__":
                     await test_func()
                 else:
                     test_func()
-                print(f"✅ {name}")
+                logger.info(f"✅ {name}")
                 passed += 1
             except Exception as e:
-                print(f"❌ {name}")
-                print(f"   {e}")
+                logger.info(f"❌ {name}")
+                logger.info(f"   {e}")
                 failed += 1
 
-        print("=" * 60)
-        print(f"Results: {passed}/{len(tests)} passed")
+        logger.info("=" * 60)
+        logger.info(f"Results: {passed}/{len(tests)} passed")
 
         if failed > 0:
-            print("⚠️  SYSTEM IN DANGEROUS STATE")
+            logger.info("⚠️  SYSTEM IN DANGEROUS STATE")
             return 1
         else:
-            print("✅ ALL INVARIANTS HOLD")
+            logger.info("✅ ALL INVARIANTS HOLD")
             return 0
 
     exit(asyncio.run(run_invariant_tests()))

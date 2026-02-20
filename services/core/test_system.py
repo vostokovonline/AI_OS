@@ -42,9 +42,9 @@ class AIOSTester:
         self.results.append(result)
 
         icon = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⏳"
-        print(f"{icon} {test_name}: {status}")
+        logger.info(f"{icon} {test_name}: {status}")
         if details:
-            print(f"   {details}")
+            logger.info(f"   {details}")
 
     def test_connection(self) -> bool:
         """Test connection to core service"""
@@ -92,7 +92,7 @@ class AIOSTester:
 
     def test_goal_ontology(self, goals: List[Dict]):
         """Test Goal Ontology v3.0 fields"""
-        print("\n=== Testing Goal Ontology v3.0 ===")
+        logger.info("\n=== Testing Goal Ontology v3.0 ===")
 
         required_fields = [
             "id", "title", "status", "goal_type", "depth_level",
@@ -116,7 +116,7 @@ class AIOSTester:
 
     def test_goal_hierarchy(self, goals: List[Dict]):
         """Test goal hierarchy (parent-child relationships)"""
-        print("\n=== Testing Goal Hierarchy ===")
+        logger.info("\n=== Testing Goal Hierarchy ===")
 
         # Build hierarchy
         hierarchy = {}
@@ -170,7 +170,7 @@ class AIOSTester:
 
     def test_atomic_goals(self, goals: List[Dict]):
         """Test atomic goals have proper requirements"""
-        print("\n=== Testing Atomic Goals ===")
+        logger.info("\n=== Testing Atomic Goals ===")
 
         atomic_goals = [g for g in goals if g.get("is_atomic")]
 
@@ -202,7 +202,7 @@ class AIOSTester:
 
     def test_goal_contracts(self, goals: List[Dict]):
         """Test goal contracts"""
-        print("\n=== Testing Goal Contracts ===")
+        logger.info("\n=== Testing Goal Contracts ===")
 
         with_contract = 0
         for goal in goals:
@@ -232,7 +232,7 @@ class AIOSTester:
 
     def test_skills_registry(self):
         """Test skills are registered"""
-        print("\n=== Testing Skills Registry ===")
+        logger.info("\n=== Testing Skills Registry ===")
 
         try:
             response = requests.get(f"{self.core_url}/skills", timeout=10)
@@ -261,7 +261,7 @@ class AIOSTester:
 
     def test_artifact_layer(self, goals: List[Dict]):
         """Test artifact layer for atomic goals"""
-        print("\n=== Testing Artifact Layer ===")
+        logger.info("\n=== Testing Artifact Layer ===")
 
         atomic_goals = [g for g in goals if g.get("is_atomic")]
 
@@ -305,24 +305,24 @@ class AIOSTester:
 
     def generate_report(self):
         """Generate test report"""
-        print("\n" + "="*60)
-        print("TEST SUMMARY")
-        print("="*60)
+        logger.info("\n" + "="*60)
+        logger.info("TEST SUMMARY")
+        logger.info("="*60)
 
         passed = sum(1 for r in self.results if r["status"] == "PASS")
         failed = sum(1 for r in self.results if r["status"] == "FAIL")
         warned = sum(1 for r in self.results if r["status"] == "WARN")
         total = len(self.results)
 
-        print(f"\nTotal Tests: {total}")
-        print(f"✅ Passed: {passed}")
-        print(f"❌ Failed: {failed}")
-        print(f"⚠️  Warnings: {warned}")
+        logger.info(f"\nTotal Tests: {total}")
+        logger.info(f"✅ Passed: {passed}")
+        logger.info(f"❌ Failed: {failed}")
+        logger.info(f"⚠️  Warnings: {warned}")
 
         if failed == 0:
-            print("\n🎉 All tests passed!")
+            logger.info("\n🎉 All tests passed!")
         else:
-            print(f"\n⚠️  {failed} test(s) failed")
+            logger.info(f"\n⚠️  {failed} test(s) failed")
 
         # Save report
         report = {
@@ -340,26 +340,26 @@ class AIOSTester:
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
-        print(f"\n📄 Report saved to: {report_path}")
+        logger.info(f"\n📄 Report saved to: {report_path}")
 
     def run_all_tests(self):
         """Run complete test suite"""
-        print("🧪 AI_OS System Test Suite")
-        print("="*60)
-        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("="*60)
+        logger.info("🧪 AI_OS System Test Suite")
+        logger.info("="*60)
+        logger.info(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("="*60)
 
         self.start_time = time.time()
 
         # 1. Connection test
         if not self.test_connection():
-            print("\n❌ Cannot connect to core service. Exiting.")
+            logger.info("\n❌ Cannot connect to core service. Exiting.")
             return
 
         # 2. Get goals
         goals = self.get_all_goals()
         if not goals:
-            print("\n❌ No goals found. Create test goals first.")
+            logger.info("\n❌ No goals found. Create test goals first.")
             return
 
         # 3. Test Goal Ontology
@@ -384,7 +384,7 @@ class AIOSTester:
         self.generate_report()
 
         elapsed = time.time() - self.start_time
-        print(f"\n⏱️  Total time: {elapsed:.2f}s")
+        logger.info(f"\n⏱️  Total time: {elapsed:.2f}s")
 
 
 if __name__ == "__main__":

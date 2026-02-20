@@ -49,7 +49,7 @@ async def calculate_depth_level(goal_id: str, db, visited=None) -> int:
 async def fix_all_depth_levels():
     """Fix depth_level for all goals in the database."""
 
-    print("🔧 Starting depth_level fix...")
+    logger.info("🔧 Starting depth_level fix...")
 
     async with AsyncSessionLocal() as db:
         # Get all goals
@@ -57,7 +57,7 @@ async def fix_all_depth_levels():
         result = await db.execute(stmt)
         all_goals = result.scalars().all()
 
-        print(f"📊 Found {len(all_goals)} goals to fix")
+        logger.info(f"📊 Found {len(all_goals)} goals to fix")
 
         # Calculate new depth levels
         updates = []
@@ -71,11 +71,11 @@ async def fix_all_depth_levels():
                     "old_depth": goal.depth_level,
                     "new_depth": new_depth
                 })
-                print(f"  📌 {goal.title[:50]}... {goal.depth_level} → {new_depth}")
+                logger.info(f"  📌 {goal.title[:50]}... {goal.depth_level} → {new_depth}")
 
         # Apply updates
         if updates:
-            print(f"\n💾 Applying {len(updates)} updates...")
+            logger.info(f"\n💾 Applying {len(updates)} updates...")
 
             for update_data in updates:
                 stmt = (
@@ -86,16 +86,16 @@ async def fix_all_depth_levels():
                 await db.execute(stmt)
 
             await db.commit()
-            print(f"✅ Updated {len(updates)} goals")
+            logger.info(f"✅ Updated {len(updates)} goals")
         else:
-            print("✅ All depth_levels are already correct!")
+            logger.info("✅ All depth_levels are already correct!")
 
         # Show distribution
-        print("\n📊 Depth level distribution:")
+        logger.info("\n📊 Depth level distribution:")
         stmt = select(Goal.depth_level, func.count(Goal.id)).group_by(Goal.depth_level)
         result = await db.execute(stmt)
         for depth, count in result.all():
-            print(f"  Level {depth}: {count} goals")
+            logger.info(f"  Level {depth}: {count} goals")
 
 
 if __name__ == "__main__":

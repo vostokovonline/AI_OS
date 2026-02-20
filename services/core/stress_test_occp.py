@@ -180,7 +180,7 @@ class StressTestWorker:
             self.log_file.write(f"[{timestamp}] {message}\n")
             self.log_file.flush()
         if self.config.verbose:
-            print(message)
+            logger.info(message)
 
     async def execute_sandbox(self, payload: Dict, payload_type: str) -> Dict:
         """Execute single sandbox operation"""
@@ -279,14 +279,14 @@ class StressTestWorker:
 
 async def run_stress_test(config: StressTestConfig) -> TestMetrics:
     """Run stress test with given configuration"""
-    print(f"\n{'='*70}")
-    print(f"OCCP v0.3 Stress Test")
-    print(f"{'='*70}")
-    print(f"Concurrent Instances: {config.concurrent_instances}")
-    print(f"Total Requests: {config.total_requests}")
-    print(f"Forbidden Ratio: {config.forbidden_ratio:.1%}")
-    print(f"Log File: {config.log_file}")
-    print(f"{'='*70}\n")
+    logger.info(f"\n{'='*70}")
+    logger.info(f"OCCP v0.3 Stress Test")
+    logger.info(f"{'='*70}")
+    logger.info(f"Concurrent Instances: {config.concurrent_instances}")
+    logger.info(f"Total Requests: {config.total_requests}")
+    logger.info(f"Forbidden Ratio: {config.forbidden_ratio:.1%}")
+    logger.info(f"Log File: {config.log_file}")
+    logger.info(f"{'='*70}\n")
 
     worker = StressTestWorker(config)
     semaphore = asyncio.Semaphore(config.concurrent_instances)
@@ -320,56 +320,56 @@ async def run_stress_test(config: StressTestConfig) -> TestMetrics:
 
 def print_metrics(metrics: TestMetrics):
     """Print test metrics"""
-    print(f"\n{'='*70}")
-    print(f"STRESS TEST RESULTS")
-    print(f"{'='*70}")
+    logger.info(f"\n{'='*70}")
+    logger.info(f"STRESS TEST RESULTS")
+    logger.info(f"{'='*70}")
 
-    print(f"\n📊 Overall Statistics:")
-    print(f"  Total Requests:        {metrics.total_requests}")
-    print(f"  Successful:            {metrics.successful_requests} ({metrics.successful_requests/metrics.total_requests*100:.1f}%)")
-    print(f"  Forbidden Violations:  {metrics.forbidden_violations}")
-    print(f"  Timeouts:              {metrics.timeouts}")
+    logger.info(f"\n📊 Overall Statistics:")
+    logger.info(f"  Total Requests:        {metrics.total_requests}")
+    logger.info(f"  Successful:            {metrics.successful_requests} ({metrics.successful_requests/metrics.total_requests*100:.1f}%)")
+    logger.info(f"  Forbidden Violations:  {metrics.forbidden_violations}")
+    logger.info(f"  Timeouts:              {metrics.timeouts}")
 
-    print(f"\n⏱️  Timing Metrics:")
-    print(f"  Avg Response Time:     {metrics.total_time/metrics.total_requests*1000:.2f}ms")
-    print(f"  Min Response Time:     {metrics.min_time*1000:.2f}ms")
-    print(f"  Max Response Time:     {metrics.max_time*1000:.2f}ms")
+    logger.info(f"\n⏱️  Timing Metrics:")
+    logger.info(f"  Avg Response Time:     {metrics.total_time/metrics.total_requests*1000:.2f}ms")
+    logger.info(f"  Min Response Time:     {metrics.min_time*1000:.2f}ms")
+    logger.info(f"  Max Response Time:     {metrics.max_time*1000:.2f}ms")
 
-    print(f"\n🚀 Throughput:")
-    print(f"  Requests/sec:          {metrics.requests_per_second:.2f}")
+    logger.info(f"\n🚀 Throughput:")
+    logger.info(f"  Requests/sec:          {metrics.requests_per_second:.2f}")
 
     if metrics.errors_by_type:
-        print(f"\n❌ Errors by Type:")
+        logger.info(f"\n❌ Errors by Type:")
         for error_type, count in sorted(metrics.errors_by_type.items(),
                                        key=lambda x: x[1], reverse=True):
-            print(f"  {error_type}:            {count}")
+            logger.info(f"  {error_type}:            {count}")
 
-    print(f"\n{'='*70}")
+    logger.info(f"\n{'='*70}")
 
     # Compliance check
-    print(f"\n✅ COMPLIANCE CHECK:")
+    logger.info(f"\n✅ COMPLIANCE CHECK:")
 
     if metrics.forbidden_violations == 0:
-        print(f"  ❌ FAILED: No forbidden violations detected")
-        print(f"     (Sandbox should reject {metrics.forbidden_violations} forbidden payloads)")
+        logger.info(f"  ❌ FAILED: No forbidden violations detected")
+        logger.info(f"     (Sandbox should reject {metrics.forbidden_violations} forbidden payloads)")
     else:
         expected_forbidden = int(metrics.total_requests * 0.3)  # Approx 30%
         detection_rate = metrics.forbidden_violations / expected_forbidden * 100 if expected_forbidden > 0 else 0
-        print(f"  ✅ Forbidden violations detected: {metrics.forbidden_violations}")
-        print(f"     Detection rate: ~{detection_rate:.0f}%")
+        logger.info(f"  ✅ Forbidden violations detected: {metrics.forbidden_violations}")
+        logger.info(f"     Detection rate: ~{detection_rate:.0f}%")
 
     success_rate = metrics.successful_requests / metrics.total_requests * 100
     if success_rate >= 95:
-        print(f"  ✅ SUCCESS RATE: {success_rate:.1f}% (target: ≥95%)")
+        logger.info(f"  ✅ SUCCESS RATE: {success_rate:.1f}% (target: ≥95%)")
     else:
-        print(f"  ❌ SUCCESS RATE: {success_rate:.1f}% (target: ≥95%)")
+        logger.info(f"  ❌ SUCCESS RATE: {success_rate:.1f}% (target: ≥95%)")
 
     if metrics.timeouts == 0:
-        print(f"  ✅ NO TIMEOUTS")
+        logger.info(f"  ✅ NO TIMEOUTS")
     else:
-        print(f"  ⚠️  TIMEOUTS: {metrics.timeouts}")
+        logger.info(f"  ⚠️  TIMEOUTS: {metrics.timeouts}")
 
-    print(f"\n{'='*70}\n")
+    logger.info(f"\n{'='*70}\n")
 
 
 # ========================

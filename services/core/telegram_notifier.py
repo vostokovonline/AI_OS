@@ -104,6 +104,6 @@ if __name__ == "__main__":
 
     async def test():
         tn = TelegramNotifier()
-        print(f"Telegram enabled: {tn.is_enabled()}")
+        logger.info(f"Telegram enabled: {tn.is_enabled()}")
 
     asyncio.run(test())

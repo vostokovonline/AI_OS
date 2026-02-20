@@ -344,7 +344,7 @@ async def test_sandbox_isolation():
 
     assert result.success == False
     assert "forbidden" in result.error.lower() or "violation" in result.error.lower()
-    print("✅ Sandbox isolation test passed")
+    logger.info("✅ Sandbox isolation test passed")
 
 
 async def test_resource_enforcement():
@@ -369,7 +369,7 @@ async def test_resource_enforcement():
     # Should be denied
     assert result.success == False
     assert "token" in result.error.lower() or "limit" in result.error.lower()
-    print("✅ Resource enforcement test passed")
+    logger.info("✅ Resource enforcement test passed")
 
 
 async def test_pure_function():
@@ -390,16 +390,16 @@ async def test_pure_function():
 
     # Same input → same output
     assert result1.output == result2.output
-    print("✅ Pure function test passed")
+    logger.info("✅ Pure function test passed")
 
 
 if __name__ == "__main__":
-    print("OCCP v0.3 Compute Assist Sandbox Tests")
-    print("=" * 50)
+    logger.info("OCCP v0.3 Compute Assist Sandbox Tests")
+    logger.info("=" * 50)
 
     asyncio.run(test_sandbox_isolation())
     asyncio.run(test_resource_enforcement())
     asyncio.run(test_pure_function())
 
-    print("=" * 50)
-    print("✅ All sandbox compliance tests passed")
+    logger.info("=" * 50)
+    logger.info("✅ All sandbox compliance tests passed")

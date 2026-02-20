@@ -134,5 +134,135 @@ class MemoryRegistry:
         }
 
 
+class PersistentMemoryRegistry:
+    """
+    Redis-backed реестр сигналов памяти.
+    
+    В отличие от MemoryRegistry:
+    - Сигналы сохраняются в Redis (переживают restart)
+    - TTL реализован через Redis TTL (автоматическое удаление)
+    - Поддержка распределённых систем
+    
+    Key format: memory_signal:{target}:{type}:{uuid}
+    """
+    
+    KEY_PREFIX = "memory_signal"
+    
+    def __init__(self, redis_client=None):
+        """
+        Args:
+            redis_client: Redis client instance. If None, creates new one.
+        """
+        self._redis = redis_client
+        self._local_cache: list[MemorySignal] = []  # Local cache for performance
+    
+    def _get_redis(self):
+        """Get Redis client (lazy initialization)"""
+        if self._redis is None:
+            import redis
+            import os
+            redis_url = os.getenv("CELERY_BROKER_URL", "redis://ns_redis:6379/0")
+            self._redis = redis.from_url(redis_url, decode_responses=True)
+        return self._redis
+    
+    def _make_key(self, signal: MemorySignal) -> str:
+        """Generate Redis key for signal"""
+        import uuid
+        return f"{self.KEY_PREFIX}:{signal.target or 'global'}:{signal.type}:{uuid.uuid4().hex[:8]}"
+    
+    def add(self, signal: MemorySignal):
+        """Добавить сигнал в Redis с TTL"""
+        try:
+            r = self._get_redis()
+            key = self._make_key(signal)
+            
+            # TTL в секундах (ttl cycles * 1 час = ttl * 3600 секунд)
+            ttl_seconds = signal.ttl * 3600
+            
+            r.setex(
+                key,
+                ttl_seconds,
+                json.dumps(signal.to_dict())
+            )
+            
+            # Also add to local cache
+            self._local_cache.append(signal)
+            
+        except Exception as e:
+            logger.info(f"⚠️ PersistentMemoryRegistry.add error: {e}")
+            # Fallback to local cache
+            self._local_cache.append(signal)
+    
+    def get_active(self) -> list[MemorySignal]:
+        """Получить все активные сигналы из Redis"""
+        signals = []
+        
+        try:
+            r = self._get_redis()
+            keys = r.keys(f"{self.KEY_PREFIX}:*")
+            
+            for key in keys:
+                try:
+                    data = r.get(key)
+                    if data:
+                        signal = MemorySignal.from_dict(json.loads(data))
+                        signals.append(signal)
+                except Exception:
+                    continue
+                    
+        except Exception as e:
+            logger.info(f"⚠️ PersistentMemoryRegistry.get_active error: {e}")
+        
+        # Merge with local cache
+        signals.extend(self._local_cache)
+        
+        return signals
+    
+    def get_by_target(self, target: str) -> list[MemorySignal]:
+        """Получить сигналы для конкретной цели"""
+        return [s for s in self.get_active() if s.target == target]
+    
+    def get_by_type(self, signal_type: MemorySignalType) -> list[MemorySignal]:
+        """Получить сигналы конкретного типа"""
+        return [s for s in self.get_active() if s.type == signal_type]
+    
+    def clear(self):
+        """Полная очистка Redis и локального кэша"""
+        try:
+            r = self._get_redis()
+            keys = r.keys(f"{self.KEY_PREFIX}:*")
+            if keys:
+                r.delete(*keys)
+        except Exception:
+            pass
+        self._local_cache = []
+    
+    def decay_all(self):
+        """
+        Уменьшить TTL всех сигналов.
+        
+        Note: В Redis TTL автоматически удаляет ключи.
+        Этот метод для совместимости с MemoryRegistry API.
+        """
+        # Redis handles TTL automatically
+        # Just clean up local cache
+        self._local_cache = [s for s in self._local_cache if not s.is_expired()]
+    
+    def summary(self) -> dict:
+        """Статистика для мониторинга"""
+        active = self.get_active()
+        return {
+            "total_signals": len(active),
+            "by_type": {t: len([s for s in active if s.type == t])
+                       for t in MemorySignalType.__args__},
+            "avg_intensity": sum(s.intensity for s in active) / len(active) if active else 0,
+            "storage": "redis",
+            "local_cache_size": len(self._local_cache)
+        }
+
+
 # Глобальный инстанс (синглтон для runtime)
 memory_registry = MemoryRegistry()
+
+# Глобальный инстанс persistent (Redis-backed)
+persistent_memory_registry = PersistentMemoryRegistry()

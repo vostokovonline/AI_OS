@@ -42,11 +42,11 @@ CURRENT CODE (WRONG):
                     # Проверяем артефакты
                     artifact_check = await artifact_registry.check_goal_artifacts(goal_id)
 
-                    print(f"📦 Artifact check: {artifact_check}")
+                    logger.info(f"📦 Artifact check: {artifact_check}")
 
                     # Для atomic goals (L3): без passed artifacts → incomplete
                     if goal.is_atomic and not artifact_check.get("goal_complete"):
-                        print(f"⚠️ Atomic goal has no passed artifacts - marking as incomplete")
+                        logger.info(f"⚠️ Atomic goal has no passed artifacts - marking as incomplete")
                         goal.status = "incomplete"  # ← WRONG STATUS
                         goal.progress = 0.9
                         await db.commit()
@@ -71,12 +71,12 @@ PATCHED CODE (CORRECT):
                     # Проверяем артефакты
                     artifact_check = await artifact_registry.check_goal_artifacts(goal_id)
 
-                    print(f"📦 Artifact check: {artifact_check}")
+                    logger.info(f"📦 Artifact check: {artifact_check}")
 
                     # PATCH: Validate invariants BEFORE marking done
                     # Invariant I3: Atomic goals MUST have artifacts to be done
                     if goal.is_atomic and not artifact_check.get("goal_complete"):
-                        print(f"⚠️ Atomic goal has no passed artifacts - marking as incomplete")
+                        logger.info(f"⚠️ Atomic goal has no passed artifacts - marking as incomplete")
 
                         # PATCH: Use correct lifecycle_state
                         goal_view.lifecycle_state = LifecycleState.ACTIVE  # NOT "done"!
@@ -95,7 +95,7 @@ PATCHED CODE (CORRECT):
                         # Use outcome validator for proper evaluation
                         outcome = await validate_goal_outcome(goal_id)
 
-                        print(f"✅ Outcome validation: {outcome['evaluation_state']}")
+                        logger.info(f"✅ Outcome validation: {outcome['evaluation_state']}")
 
                         # Set lifecycle based on outcome
                         if outcome.get("passed"):
@@ -107,9 +107,9 @@ PATCHED CODE (CORRECT):
                         await db.commit()
 
                         # PATCH: Log that we used NEW MODEL
-                        print(f"✅ Goal '{goal.title}' completed with NEW ontology")
-                        print(f"   Lifecycle: {goal_view.lifecycle_state}")
-                        print(f"   Evaluation: {outcome.get('evaluation_state')}")
+                        logger.info(f"✅ Goal '{goal.title}' completed with NEW ontology")
+                        logger.info(f"   Lifecycle: {goal_view.lifecycle_state}")
+                        logger.info(f"   Evaluation: {outcome.get('evaluation_state')}")
 
                     # PATCH: For non-atomic goals, check completion policy
                     if not goal.is_atomic:
@@ -128,10 +128,10 @@ PATCHED CODE (CORRECT):
                         goal.progress = outcome.get("progress", 0.0)
                         await db.commit()
 
-                        print(f"✅ Non-atomic goal completed with NEW ontology")
-                        print(f"   Type: {goal.goal_type}")
-                        print(f"   Policy: {goal_view.completion_policy}")
-                        print(f"   Lifecycle: {goal_view.lifecycle_state}")
+                        logger.info(f"✅ Non-atomic goal completed with NEW ontology")
+                        logger.info(f"   Type: {goal.goal_type}")
+                        logger.info(f"   Policy: {goal_view.completion_policy}")
+                        logger.info(f"   Lifecycle: {goal_view.lifecycle_state}")
 ```
 """
 
@@ -161,28 +161,28 @@ async def mark_goal_done(self, goal_id: str, approved_by: str = None) -> Dict:
         try:
             validate_and_raise(goal_view)
         except GoalInvariantViolation as e:
-            print(f"❌ INVARIANT VIOLATION PREVENTED:")
-            print(str(e))
+            logger.info(f"❌ INVARIANT VIOLATION PREVENTED:")
+            logger.info(str(e))
             raise
 
         # PATCH: Check if completion allowed
         allowed, reason = goal_view.can_mark_completed()
         if not allowed:
-            print(f"⚠️ COMMISSION PREVENTED:")
-            print(f"  Reason: {reason}")
+            logger.info(f"⚠️ COMMISSION PREVENTED:")
+            logger.info(f"  Reason: {reason}")
             raise ValueError(f"Cannot mark goal as done: {reason}")
 
         # PATCH: Use correct lifecycle_state based on policy
         if goal_view.completion_policy == CompletionPolicy.TREND_BASED:
             # Continuous: never "done"
-            print(f"⚠️ Continuous goal cannot be marked as 'done'")
-            print(f"   Use lifecycle_state='ongoing' instead")
+            logger.info(f"⚠️ Continuous goal cannot be marked as 'done'")
+            logger.info(f"   Use lifecycle_state='ongoing' instead")
             raise ValueError("Continuous goals use ongoing state, not done")
 
         elif goal_view.completion_policy == CompletionPolicy.SCALAR_ALIGNMENT:
             # Directional: never "done"
-            print(f"⚠️ Directional goal cannot be marked as 'done'")
-            print(f"   Use lifecycle_state='permanent' instead")
+            logger.info(f"⚠️ Directional goal cannot be marked as 'done'")
+            logger.info(f"   Use lifecycle_state='permanent' instead")
             raise ValueError("Directional goals use permanent state, not done")
 
         # Allow completion for achievable/atomic
@@ -256,7 +256,7 @@ async def fix_goal_invariant(goal_id: str, correction: dict):
         new_lifecycle = correction.get("lifecycle_state")
         if new_lifecycle:
             goal_view.lifecycle_state = LifecycleState(new_lifecycle)
-            print(f"✅ Fixed {goal.title}: lifecycle_state → {new_lifecycle_state}")
+            logger.info(f"✅ Fixed {goal.title}: lifecycle_state → {new_lifecycle_state}")
 
         await db.commit()
 
@@ -327,13 +327,13 @@ EXPECTED OUTPUT:
 AFTER APPLYING PATCHES:
 
 1. Test compatibility layer:
-   python3 -c "from compatibility import wrap_goal, LifecycleState; print('✅ Compatibility OK')"
+   python3 -c "from compatibility import wrap_goal, LifecycleState; logger.info('✅ Compatibility OK')"
 
 2. Test invariants:
-   python3 -c "from invariants import GoalInvariants; print('✅ Invariants OK')"
+   python3 -c "from invariants import GoalInvariants; logger.info('✅ Invariants OK')"
 
 3. Test outcome validator:
-   python3 -c "from outcome_validator import outcome_validator; print('✅ Outcome validator OK')"
+   python3 -c "from outcome_validator import outcome_validator; logger.info('✅ Outcome validator OK')"
 
 4. Run invariant scan:
    curl http://localhost:8000/admin/scan-invariants
@@ -344,4 +344,4 @@ AFTER APPLYING PATCHES:
    ALTER TABLE goals VALIDATE CONSTRAINT check_goal_type_completion_state;
 """
 
-print(__doc__)
+logger.info(__doc__)

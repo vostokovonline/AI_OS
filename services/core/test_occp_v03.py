@@ -377,7 +377,7 @@ class TestAuditTrail:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("OCCP v0.3 Compliance Tests")
-    print("=" * 60)
+    logger.info("OCCP v0.3 Compliance Tests")
+    logger.info("=" * 60)
 
     pytest.main([__file__, "-v"])

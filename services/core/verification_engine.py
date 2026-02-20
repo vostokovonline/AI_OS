@@ -346,7 +346,7 @@ def example_verification():
 
     results = engine.verify(artifact, rules)
 
-    print("Verification Results:")
+    logger.info("Verification Results:")
     for result in results:
         status = "✅" if result["passed"] else "❌"
-        print(f"{status} {result['name']}: {result['details']}")
+        logger.info(f"{status} {result['name']}: {result['details']}")

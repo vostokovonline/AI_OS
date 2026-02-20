@@ -133,7 +133,7 @@ class GoalEvaluator:
             }
 
         except Exception as e:
-            print(f"❌ Evaluation error: {e}")
+            logger.info(f"❌ Evaluation error: {e}")
             return {
                 "passed": False,
                 "score": 0.0,
@@ -293,7 +293,7 @@ class GoalEvaluator:
             return created_goals
 
         except Exception as e:
-            print(f"❌ Improvement goals generation error: {e}")
+            logger.info(f"❌ Improvement goals generation error: {e}")
             return []
 
     async def generate_next_level_goal(self, completed_goal_id: str) -> Optional[Dict]:
@@ -376,7 +376,7 @@ class GoalEvaluator:
                 }
 
         except Exception as e:
-            print(f"❌ Next goal generation error: {e}")
+            logger.info(f"❌ Next goal generation error: {e}")
             return None
 
     async def _send_next_goal_notification(self, completed_goal: Goal, next_goal: Goal, reasoning: str):

@@ -77,7 +77,7 @@ class ChatOpenAIWithFallback(ChatOpenAI):
 
         except ImportError:
             # Если llm_fallback недоступен, используем оригинальный метод
-            print("⚠️ llm_fallback not available, using default ChatOpenAI")
+            logger.info("⚠️ llm_fallback not available, using default ChatOpenAI")
             return super()._generate(messages, stop, run_manager, **kwargs)
 
 

@@ -81,12 +81,12 @@ async def get_uow():
         yield uow
 
 async def wait_for_db():
-    print("⏳ Connecting to Database...")
+    logger.info("⏳ Connecting to Database...")
     while True:
         try:
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
-            print("✅ Database Connected!")
+            logger.info("✅ Database Connected!")
             break
         except: await asyncio.sleep(2)
 
@@ -96,7 +96,7 @@ async def startup():
     async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
     await bootstrap_dna()
     start_scheduler()
-    print("🚀 SYSTEM ONLINE")
+    logger.info("🚀 SYSTEM ONLINE")
 
 @app.post("/chat", response_model=MessageResponse)
 async def chat(req: MessageCreate, db=Depends(get_db)):
@@ -277,7 +277,7 @@ async def create_goal_endpoint(req: GoalRequest, uow: UnitOfWork = Depends(get_u
                 # Temporal failed, но goal уже создан в БД (UoW закоммитил)
                 # Это acceptable - goal остаётся в pending, можно запустить вручную
                 import traceback
-                print(f"⚠️ Goal created but Temporal workflow failed to start: {temporal_error}")
+                logger.info(f"⚠️ Goal created but Temporal workflow failed to start: {temporal_error}")
                 traceback.print_exc()
                 return {
                     "status": "created",
@@ -369,7 +369,7 @@ async def resume_stuck_goals():
                     execute_goal_task.delay(str(goal_id), None)
                     started_count += 1
                 except Exception as e:
-                    print(f"Failed to start goal {goal_id}: {e}")
+                    logger.info(f"Failed to start goal {goal_id}: {e}")
 
             return {
                 "status": "ok",
@@ -767,7 +767,7 @@ async def bind_goal_context(goal_id: str, context: dict):
 
             if existing_mission:
                 parent_goal = existing_mission
-                print(f"🔗 Found existing Mission: {parent_goal.title}")
+                logger.info(f"🔗 Found existing Mission: {parent_goal.title}")
             else:
                 new_parent = Goal(
                     title=parent_title,
@@ -790,7 +790,7 @@ async def bind_goal_context(goal_id: str, context: dict):
                 )
 
                 parent_goal = new_parent
-                print(f"✨ Created new Mission: {parent_goal.title}")
+                logger.info(f"✨ Created new Mission: {parent_goal.title}")
 
         else:
             raise HTTPException(status_code=400, detail="Either parent_title or existing_parent_id required")
@@ -1810,7 +1810,7 @@ async def handle_ui_event(event: dict):
     event_data = event.get("data", {})
 
     # Логируем событие
-    print(f"[UI Event] {event_type}: {event_data}")
+    logger.info(f"[UI Event] {event_type}: {event_data}")
 
     # Здесь можно добавить обработку разных типов событий
     if event_type == "node_selected":
@@ -2318,8 +2318,8 @@ async def check_question_timeouts():
                 default_answer = content.get("default_answer")
                 goal_id = artifact.metadata.get("goal_id")
 
-                print(f"⏰ Question timeout: {artifact.id}")
-                print(f"   Action: {timeout_action}")
+                logger.info(f"⏰ Question timeout: {artifact.id}")
+                logger.info(f"   Action: {timeout_action}")
 
                 if timeout_action == "continue_with_default":
                     if default_answer:
@@ -2336,7 +2336,7 @@ async def check_question_timeouts():
                             "default_answer": default_answer[:100] if default_answer else None
                         })
 
-                        print(f"   ✓ Used default answer")
+                        logger.info(f"   ✓ Used default answer")
                 else:
                     timeout_action = "fail_goal"
 
@@ -2365,9 +2365,9 @@ async def check_question_timeouts():
                                 "goal_id": goal_id
                             })
 
-                            print(f"   ✗ Goal {goal_id[:8]}... marked as failed")
+                            logger.info(f"   ✗ Goal {goal_id[:8]}... marked as failed")
                     except Exception as e:
-                        print(f"   Error failing goal: {e}")
+                        logger.info(f"   Error failing goal: {e}")
 
             elif timeout_action == "wait_longer":
                 new_timeout = now + timedelta(hours=1)
@@ -2382,7 +2382,7 @@ async def check_question_timeouts():
                     "extended_until": new_timeout.isoformat()
                 })
 
-                print(f"   ⏱ Extended until {new_timeout.isoformat()}")
+                logger.info(f"   ⏱ Extended until {new_timeout.isoformat()}")
 
     return {
         "status": "ok",
@@ -4912,7 +4912,7 @@ async def decompose_from_answers(session_id: str):
                 })
 
             # Run decomposition with context
-            print(f"🧠 Decomposing goal {session.goal_id} with {len(answers_context)} answers")
+            logger.info(f"🧠 Decomposing goal {session.goal_id} with {len(answers_context)} answers")
 
             # For now, just call standard decompose (answers context is logged but not used yet)
             # TODO: Integrate answers into decompose_goal logic

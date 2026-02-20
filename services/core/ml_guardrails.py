@@ -239,7 +239,7 @@ class DriftDetector:
             "saved_at": datetime.now(timezone.utc).isoformat()
         }
 
-        print(f"📊 [Drift Detection] Saved training distribution stats "
+        logger.info(f"📊 [Drift Detection] Saved training distribution stats "
               f"({X_train.shape[0]} samples, {X_train.shape[1]} features)")
 
     def detect_drift(
@@ -301,9 +301,9 @@ class DriftDetector:
                 "features": features[0].tolist()
             })
 
-            print(f"⚠️  [Drift Detection] Drift detected!")
+            logger.info(f"⚠️  [Drift Detection] Drift detected!")
             for detail in drift_details:
-                print(f"    • {detail}")
+                logger.info(f"    • {detail}")
 
         return drift_detected, drift_details
 

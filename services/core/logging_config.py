@@ -1,7 +1,7 @@
 """
 Centralized Logging Configuration for AI-OS v3.0
 
-Replaces all print() statements with structured logging.
+Replaces all logger.info() statements with structured logging.
 Uses structlog for production-ready logging.
 
 Author: AI-OS Core Team

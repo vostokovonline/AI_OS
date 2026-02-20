@@ -67,10 +67,10 @@ class MigrationTestSuite:
             count_result = await db.execute(count_stmt)
             total_count = count_result.scalar() or 0
 
-            print(f"\n{'='*70}")
-            print(f"MIGRATION TEST: {total_count} GOALS")
-            print(f"{'='*70}")
-            print(f"Started: {datetime.now().isoformat()}")
+            logger.info(f"\n{'='*70}")
+            logger.info(f"MIGRATION TEST: {total_count} GOALS")
+            logger.info(f"{'='*70}")
+            logger.info(f"Started: {datetime.now().isoformat()}")
 
             # Get all goals
             stmt = select(Goal)
@@ -87,7 +87,7 @@ class MigrationTestSuite:
 
                 # Progress indicator
                 if i % 10 == 0:
-                    print(f"  Tested: {i}/{total_count} goals...")
+                    logger.info(f"  Tested: {i}/{total_count} goals...")
 
                 # Update statistics
                 gt = goal.goal_type
@@ -202,48 +202,48 @@ class MigrationTestSuite:
 
     def _print_summary(self):
         """Print test summary"""
-        print(f"\n{'='*70}")
-        print("MIGRATION TEST SUMMARY")
-        print(f"{'='*70}")
+        logger.info(f"\n{'='*70}")
+        logger.info("MIGRATION TEST SUMMARY")
+        logger.info(f"{'='*70}")
 
         total = self.statistics["total_goals"]
         passed = sum(1 for r in self.results if r.passed and not r.failed)
         failed = sum(1 for r in self.results if r.failed)
 
-        print(f"\n📊 STATISTICS:")
-        print(f"  Total goals: {total}")
-        print(f"  Passed: {passed} ({passed/total*100:.1f}%)")
-        print(f"  Failed: {failed} ({failed/total*100:.1f}%)")
+        logger.info(f"\n📊 STATISTICS:")
+        logger.info(f"  Total goals: {total}")
+        logger.info(f"  Passed: {passed} ({passed/total*100:.1f}%)")
+        logger.info(f"  Failed: {failed} ({failed/total*100:.1f}%)")
 
-        print(f"\n📋 BY GOAL TYPE:")
+        logger.info(f"\n📋 BY GOAL TYPE:")
         for gt, count in self.statistics["by_type"].items():
-            print(f"  {gt}: {count}")
+            logger.info(f"  {gt}: {count}")
 
         if self.statistics["violations_by_type"]:
-            print(f"\n⚠️  VIOLATIONS BY TYPE:")
+            logger.info(f"\n⚠️  VIOLATIONS BY TYPE:")
             for gt, count in self.statistics["violations_by_type"].items():
-                print(f"  {gt}: {count} violations")
+                logger.info(f"  {gt}: {count} violations")
 
         # Show first 20 failures
         failures = [r for r in self.results if r.failed]
         if failures:
-            print(f"\n❌  FAILURES ({len(failures)}):")
-            print("-"*70)
+            logger.info(f"\n❌  FAILURES ({len(failures)}):")
+            logger.info("-"*70)
 
             for i, f in enumerate(failures[:20], 1):
-                print(f"\n{i}. {f.title}")
-                print(f"   Type: {f.goal_type}")
-                print(f"   Status: {f.test_timestamp}")
-                print(f"   Violations:")
+                logger.info(f"\n{i}. {f.title}")
+                logger.info(f"   Type: {f.goal_type}")
+                logger.info(f"   Status: {f.test_timestamp}")
+                logger.info(f"   Violations:")
                 for v in f.violations:
-                    print(f"     - {v}")
+                    logger.info(f"     - {v}")
 
             if len(failures) > 20:
-                print(f"\n... and {len(failures) - 20} more")
+                logger.info(f"\n... and {len(failures) - 20} more")
         else:
-            print(f"\n✅ NO FAILURES - All goals can migrate safely")
+            logger.info(f"\n✅ NO FAILURES - All goals can migrate safely")
 
-        print(f"\n{'='*70}\n")
+        logger.info(f"\n{'='*70}\n")
 
     def _get_overall_result(self) -> MigrationTestResult:
         """Get overall test result"""
@@ -304,7 +304,7 @@ class MigrationTestSuite:
         with open(filename, "w") as f:
             f.write(self._get_report_text())
 
-        print(f"\n📄 Report saved to: {filename}")
+        logger.info(f"\n📄 Report saved to: {filename}")
 
     def _get_report_text(self) -> str:
         """Generate text report"""
@@ -353,12 +353,12 @@ class MigrationTestSuite:
 
 async def run_migration_tests():
     """Run complete migration test suite"""
-    print("\n" + "="*70)
-    print("MIGRATION TEST SUITE")
-    print("="*70)
-    print("Testing 172 existing goals for ontology compliance...")
-    print(f"Started: {datetime.now().isoformat()}")
-    print("="*70 + "\n")
+    logger.info("\n" + "="*70)
+    logger.info("MIGRATION TEST SUITE")
+    logger.info("="*70)
+    logger.info("Testing 172 existing goals for ontology compliance...")
+    logger.info(f"Started: {datetime.now().isoformat()}")
+    logger.info("="*70 + "\n")
 
     suite = MigrationTestSuite()
     result = await suite.test_all_goals()
@@ -370,7 +370,7 @@ async def run_migration_tests():
     with open(fix_filename, "w") as f:
         f.write(fix_script)
 
-    print(f"\n📄 Fix script saved to: {fix_filename}")
+    logger.info(f"\n📄 Fix script saved to: {fix_filename}")
 
     # Save report
     suite.save_report()
@@ -393,27 +393,27 @@ async def run_migration_tests():
 if __name__ == "__main__":
     result = asyncio.run(run_migration_tests())
 
-    print("\n" + "="*70)
-    print("MIGRATION TEST COMPLETE")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info("MIGRATION TEST COMPLETE")
+    logger.info("="*70)
 
     if result["success"]:
-        print("✅ RESULT: ALL TESTS PASSED")
-        print(f"   Total tested: {result['total_tested']}")
-        print(f"   Passed: {result['passed']}")
-        print(f"   Failed: {result['failed']}")
-        print("\n🎉 Migration can proceed safely!")
+        logger.info("✅ RESULT: ALL TESTS PASSED")
+        logger.info(f"   Total tested: {result['total_tested']}")
+        logger.info(f"   Passed: {result['passed']}")
+        logger.info(f"   Failed: {result['failed']}")
+        logger.info("\n🎉 Migration can proceed safely!")
 
-        print("\n⚠️  REMINDER: Even with tests passing, REVIEW")
-        print("   the generated fix scripts before applying them.")
+        logger.info("\n⚠️  REMINDER: Even with tests passing, REVIEW")
+        logger.info("   the generated fix scripts before applying them.")
 
     else:
-        print("❌ RESULT: TESTS FAILED")
-        print(f"   Total tested: {result['total_tested']}")
-        print(f"   Passed: {result['passed']}")
-        print(f"   Failed: {result['failed']}")
-        print("\n📋 NEXT STEPS:")
-        print("   1. Review migration_test_report.txt")
-        print(f"   2. Review {result['fix_script_generated']}")
-        print("   3. Apply fixes manually or review violations")
-        print("   4. Re-run tests after fixes")
+        logger.info("❌ RESULT: TESTS FAILED")
+        logger.info(f"   Total tested: {result['total_tested']}")
+        logger.info(f"   Passed: {result['passed']}")
+        logger.info(f"   Failed: {result['failed']}")
+        logger.info("\n📋 NEXT STEPS:")
+        logger.info("   1. Review migration_test_report.txt")
+        logger.info(f"   2. Review {result['fix_script_generated']}")
+        logger.info("   3. Apply fixes manually or review violations")
+        logger.info("   4. Re-run tests after fixes")

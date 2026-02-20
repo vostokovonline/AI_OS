@@ -148,11 +148,11 @@ async def test_sk_lock():
     tasks = [gateway._sk_check(request) for _ in range(100)]
     await asyncio.gather(*tasks)
 
-    print(f'SK called {gateway.sk_checker.call_count} times')
+    logger.info(f'SK called {gateway.sk_checker.call_count} times')
     assert gateway.sk_checker.call_count == 100
 
 asyncio.run(test_sk_lock())
-print('✅ SK lock unit test PASSED')
+logger.info('✅ SK lock unit test PASSED')
 "
 ```
 
@@ -272,16 +272,16 @@ async def test_timing_consistency():
     avg_allowed = sum(times_allowed) / len(times_allowed) * 1000
     avg_forbidden = sum(times_forbidden) / len(times_forbidden) * 1000
 
-    print(f'Allowed payload avg: {avg_allowed:.2f}ms')
-    print(f'Forbidden payload avg: {avg_forbidden:.2f}ms')
-    print(f'Timing difference: {abs(avg_allowed - avg_forbidden):.2f}ms')
+    logger.info(f'Allowed payload avg: {avg_allowed:.2f}ms')
+    logger.info(f'Forbidden payload avg: {avg_forbidden:.2f}ms')
+    logger.info(f'Timing difference: {abs(avg_allowed - avg_forbidden):.2f}ms')
 
     # Check if timing is similar (within 10x)
     ratio = max(avg_allowed, avg_forbidden) / min(avg_allowed, avg_forbidden)
     if ratio < 10:
-        print('✅ Timing consistency acceptable (ratio < 10x)')
+        logger.info('✅ Timing consistency acceptable (ratio < 10x)')
     else:
-        print(f'⚠️  Timing ratio too high: {ratio:.1f}x')
+        logger.info(f'⚠️  Timing ratio too high: {ratio:.1f}x')
 
 asyncio.run(test_timing_consistency())
 "
@@ -383,13 +383,13 @@ async def test_concurrent_audit():
     with open(temp_path, 'r') as f:
         lines = f.readlines()
 
-    print(f'Expected lines: 50')
-    print(f'Actual lines: {len(lines)}')
+    logger.info(f'Expected lines: 50')
+    logger.info(f'Actual lines: {len(lines)}')
 
     if len(lines) == 50:
-        print('✅ All writes completed (no data loss)')
+        logger.info('✅ All writes completed (no data loss)')
     else:
-        print(f'❌ Data loss! Missing {50 - len(lines)} lines')
+        logger.info(f'❌ Data loss! Missing {50 - len(lines)} lines')
 
     # Cleanup
     os.unlink(temp_path)
@@ -529,18 +529,18 @@ async def test_rate_limiter():
     for i in range(10):
         assert await limiter.acquire() == True
 
-    print('✅ First 10 requests allowed')
+    logger.info('✅ First 10 requests allowed')
 
     # Next request should be denied (out of tokens)
     assert await limiter.acquire() == False
-    print('✅ 11th request denied (rate limit working)')
+    logger.info('✅ 11th request denied (rate limit working)')
 
     # Wait for token refill
     await asyncio.sleep(0.2)
 
     # Should allow 1 more
     assert await limiter.acquire() == True
-    print('✅ Request allowed after refill')
+    logger.info('✅ Request allowed after refill')
 
 asyncio.run(test_rate_limiter())
 "
@@ -598,14 +598,14 @@ async def test_throttling():
     allowed = sum(results)
     denied = len(results) - allowed
 
-    print(f'Allowed: {allowed}/100')
-    print(f'Denied: {denied}/100')
+    logger.info(f'Allowed: {allowed}/100')
+    logger.info(f'Denied: {denied}/100')
 
     # Should allow ~10-20 (burst size + race conditions)
     if 10 <= allowed <= 20:
-        print('✅ Rate limiting working correctly')
+        logger.info('✅ Rate limiting working correctly')
     else:
-        print(f'⚠️  Unexpected allowed count: {allowed}')
+        logger.info(f'⚠️  Unexpected allowed count: {allowed}')
 
 asyncio.run(test_throttling())
 "
@@ -730,16 +730,16 @@ If any phase FAIL → Fix and re-test.
 
 
 if __name__ == "__main__":
-    print("="*70)
-    print("OCCP v0.3 QA/Regression Checklist")
-    print("="*70)
-    print(f"Version: {CHECKLIST_VERSION}")
-    print(f"Date: {DATE}")
-    print("="*70)
-    print("\nTo use this checklist:")
-    print("1. Start with PHASE 0 to establish baseline")
-    print("2. Proceed through PHASE 1-4 in order")
-    print("3. Run PHASE 5 for final verification")
-    print("4. Fill in ACTUAL results for each step")
-    print("5. Mark PASS/FAIL based on EXPECTED vs ACTUAL")
-    print("="*70)
+    logger.info("="*70)
+    logger.info("OCCP v0.3 QA/Regression Checklist")
+    logger.info("="*70)
+    logger.info(f"Version: {CHECKLIST_VERSION}")
+    logger.info(f"Date: {DATE}")
+    logger.info("="*70)
+    logger.info("\nTo use this checklist:")
+    logger.info("1. Start with PHASE 0 to establish baseline")
+    logger.info("2. Proceed through PHASE 1-4 in order")
+    logger.info("3. Run PHASE 5 for final verification")
+    logger.info("4. Fill in ACTUAL results for each step")
+    logger.info("5. Mark PASS/FAIL based on EXPECTED vs ACTUAL")
+    logger.info("="*70)

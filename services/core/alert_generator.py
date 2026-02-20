@@ -382,10 +382,10 @@ class AlertGenerator:
             db.commit()
             db.refresh(alert)
 
-            print(f"🚨 [ALERT] {alert.alert_type}: {alert.explanation}")
+            logger.info(f"🚨 [ALERT] {alert.alert_type}: {alert.explanation}")
 
         except Exception as e:
-            print(f"⚠️  [ALERT] Failed to persist alert: {e}")
+            logger.info(f"⚠️  [ALERT] Failed to persist alert: {e}")
             db.rollback()
 
         finally:

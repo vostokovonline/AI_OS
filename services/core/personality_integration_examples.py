@@ -41,15 +41,15 @@ async def example_goal_executor_with_personality(goal_id: str, user_id: str):
     # 2. Получить contextual memory
     context = await engine.get_contextual_memory(user_id)
 
-    print(f"Выполняю goal для пользователя с эмоциональным тоном: {context.emotional_tone_recent}")
-    print(f"Стиль общения: {profile.preferences.communication_style.tone}")
+    logger.info(f"Выполняю goal для пользователя с эмоциональным тоном: {context.emotional_tone_recent}")
+    logger.info(f"Стиль общения: {profile.preferences.communication_style.tone}")
 
     # 3. Проверить конфликты
     detector = get_goal_conflict_detector()
     conflicts = await detector.check_goal_conflicts(goal_id)
 
     if conflicts.has_conflicts:
-        print(f"⚠️  Обнаружены конфликты: {len(conflicts.conflicts)}")
+        logger.info(f"⚠️  Обнаружены конфликты: {len(conflicts.conflicts)}")
         # Предложить пользователю варианты разрешения
 
     # 4. Вычислить bias с учётом личности
@@ -66,9 +66,9 @@ async def example_goal_executor_with_personality(goal_id: str, user_id: str):
         goals=goals_pressure
     )
 
-    print(f"Коммуникационный стиль: {bias.tone}")
-    print(f"Уровень детализации: {bias.detail_level}")
-    print(f"LLM профиль: {bias.llm_profile}")
+    logger.info(f"Коммуникационный стиль: {bias.tone}")
+    logger.info(f"Уровень детализации: {bias.detail_level}")
+    logger.info(f"LLM профиль: {bias.llm_profile}")
 
     # 5. Использовать bias для настройки execution
     return {
@@ -256,7 +256,7 @@ async def example_update_contextual_memory_after_goal(goal_id: str, user_id: str
         behavioral_summary=behavioral_summary
     )
 
-    print(f"✅ Contextual memory обновлена: {emotional_tone}")
+    logger.info(f"✅ Contextual memory обновлена: {emotional_tone}")
 
 
 # =============================================================================
@@ -292,7 +292,7 @@ async def example_personality_feedback_loop(goal_id: str, user_id: str, user_fee
             }
         })
 
-        print(f"✅ Детальность снижена до: {new_detail}")
+        logger.info(f"✅ Детальность снижена до: {new_detail}")
 
     elif "слишком кратко" in user_feedback.lower():
         # Пользователь хочет больше деталей
@@ -307,7 +307,7 @@ async def example_personality_feedback_loop(goal_id: str, user_id: str, user_fee
             }
         })
 
-        print(f"✅ Детальность повышена до: {new_detail}")
+        logger.info(f"✅ Детальность повышена до: {new_detail}")
 
     elif "слишком эмоционально" in user_feedback.lower():
         # Пользователь хочет более спокойный тон
@@ -319,7 +319,7 @@ async def example_personality_feedback_loop(goal_id: str, user_id: str, user_fee
             }
         })
 
-        print("✅ Тон изменён на спокойный")
+        logger.info("✅ Тон изменён на спокойный")
 
     # 3. Записать feedback
     await engine.record_feedback(
@@ -381,27 +381,27 @@ async def full_personality_integration_example(goal_title: str, user_id: str):
     3. Выполнение
     4. Feedback
     """
-    print(f"\n{'='*60}")
-    print(f"PERSONALITY-INTEGRATED GOAL EXECUTION")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"PERSONALITY-INTEGRATED GOAL EXECUTION")
+    logger.info(f"{'='*60}\n")
 
     # 1. Получить профиль
     engine = get_personality_engine()
     profile = await engine.get_profile(user_id)
 
-    print(f"👤 User Profile:")
-    print(f"   - Tone: {profile.preferences.communication_style.tone}")
-    print(f"   - Detail: {profile.preferences.communication_style.detail_level}")
-    print(f"   - Growth motivation: {profile.motivations.growth}")
-    print(f"   - Achievement: {profile.motivations.achievement}")
-    print(f"   - Openness: {profile.core_traits.openness}")
+    logger.info(f"👤 User Profile:")
+    logger.info(f"   - Tone: {profile.preferences.communication_style.tone}")
+    logger.info(f"   - Detail: {profile.preferences.communication_style.detail_level}")
+    logger.info(f"   - Growth motivation: {profile.motivations.growth}")
+    logger.info(f"   - Achievement: {profile.motivations.achievement}")
+    logger.info(f"   - Openness: {profile.core_traits.openness}")
 
     # 2. Contextual memory
     context = await engine.get_contextual_memory(user_id)
-    print(f"\n🧠 Context:")
-    print(f"   - Emotional tone: {context.emotional_tone_recent}")
-    print(f"   - Recent goals: {len(context.recent_goals)}")
-    print(f"   - Interaction streak: {context.interaction_streak} days")
+    logger.info(f"\n🧠 Context:")
+    logger.info(f"   - Emotional tone: {context.emotional_tone_recent}")
+    logger.info(f"   - Recent goals: {len(context.recent_goals)}")
+    logger.info(f"   - Interaction streak: {context.interaction_streak} days")
 
     # 3. Decision bias
     goals = [GoalPressure(
@@ -413,29 +413,29 @@ async def full_personality_integration_example(goal_title: str, user_id: str):
     )]
 
     bias = await evaluate_with_personality(user_id, goals)
-    print(f"\n🎯 Decision Bias:")
-    print(f"   - Depth: {bias.depth}")
-    print(f"   - Speed: {bias.speed}")
-    print(f"   - LLM Profile: {bias.llm_profile}")
-    print(f"   - Risk tolerance: {bias.risk_tolerance}")
-    print(f"   - Communication: {bias.tone}, {bias.detail_level}")
-    print(f"   - Value alignment: {bias.value_alignment}")
+    logger.info(f"\n🎯 Decision Bias:")
+    logger.info(f"   - Depth: {bias.depth}")
+    logger.info(f"   - Speed: {bias.speed}")
+    logger.info(f"   - LLM Profile: {bias.llm_profile}")
+    logger.info(f"   - Risk tolerance: {bias.risk_tolerance}")
+    logger.info(f"   - Communication: {bias.tone}, {bias.detail_level}")
+    logger.info(f"   - Value alignment: {bias.value_alignment}")
 
     # 4. Agent prompts
     agent_prompts = await get_all_personality_aware_prompts(user_id)
-    print(f"\n🤖 Agent Prompts:")
-    print(f"   - Supervisor: {len(agent_prompts['SUPERVISOR'])} chars")
-    print(f"   - Coder: {len(agent_prompts['CODER'])} chars")
-    print(f"   - Coach: {len(agent_prompts['COACH'])} chars")
+    logger.info(f"\n🤖 Agent Prompts:")
+    logger.info(f"   - Supervisor: {len(agent_prompts['SUPERVISOR'])} chars")
+    logger.info(f"   - Coder: {len(agent_prompts['CODER'])} chars")
+    logger.info(f"   - Coach: {len(agent_prompts['COACH'])} chars")
 
     # 5. Conflict check
     detector = get_goal_conflict_detector()
     # conflicts = await detector.check_goal_conflicts(goal_id)
-    print(f"\n⚠️  Conflict Detection: Ready")
+    logger.info(f"\n⚠️  Conflict Detection: Ready")
 
-    print(f"\n{'='*60}")
-    print(f"✅ PERSONALITY INTEGRATED")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"✅ PERSONALITY INTEGRATED")
+    logger.info(f"{'='*60}\n")
 
     return {
         "profile": profile.dict(),

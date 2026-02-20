@@ -321,7 +321,7 @@ class GoalReflector:
                 }
 
         except Exception as e:
-            print(f"❌ Next goal generation error: {e}")
+            logger.info(f"❌ Next goal generation error: {e}")
             return None
 
     async def _create_improvement_goal(self, parent_goal: Goal, remediation: Dict) -> Optional[Dict]:
@@ -624,7 +624,7 @@ SCORE: {score}
             return next_goal
 
         except Exception as e:
-            print(f"⚠️ Failed to create next goal: {e}")
+            logger.info(f"⚠️ Failed to create next goal: {e}")
             return None
 
 

@@ -31,7 +31,7 @@ from api.middleware import RateLimitMiddleware, LoggingMiddleware
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
-    print("⏳ Starting AI-OS Core...")
+    logger.info("⏳ Starting AI-OS Core...")
     
     # Wait for database
     await wait_for_db()
@@ -46,19 +46,19 @@ async def lifespan(app: FastAPI):
     # Start scheduler
     start_scheduler()
     
-    print("🚀 AI-OS SYSTEM ONLINE")
+    logger.info("🚀 AI-OS SYSTEM ONLINE")
     
     yield
     
     # Shutdown
-    print("🛑 Shutting down AI-OS Core...")
+    logger.info("🛑 Shutting down AI-OS Core...")
     await close_db_connections()
-    print("✅ Shutdown complete")
+    logger.info("✅ Shutdown complete")
 
 
 async def wait_for_db():
     """Wait for database connection"""
-    print("⏳ Connecting to Database...")
+    logger.info("⏳ Connecting to Database...")
     max_retries = 30
     retry_count = 0
     
@@ -67,11 +67,11 @@ async def wait_for_db():
             from sqlalchemy import text
             async with AsyncSessionLocal() as session:
                 await session.execute(text("SELECT 1"))
-            print("✅ Database Connected!")
+            logger.info("✅ Database Connected!")
             return
         except Exception as e:
             retry_count += 1
-            print(f"  Retry {retry_count}/{max_retries}: {e}")
+            logger.info(f"  Retry {retry_count}/{max_retries}: {e}")
             await asyncio.sleep(2)
     
     raise Exception("Failed to connect to database after maximum retries")

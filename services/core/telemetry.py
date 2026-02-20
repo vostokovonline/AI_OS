@@ -21,4 +21,4 @@ async def log_action(session_id, agent, tool, input_data, output_data, status, s
                 stats.errors_count += 1
                 stats.last_error = str(output_data)[:200]
             await db.commit()
-    except Exception as e: print(f"Telemetry Error: {e}")
+    except Exception as e: logger.info(f"Telemetry Error: {e}")

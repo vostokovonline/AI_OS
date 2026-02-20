@@ -30,13 +30,13 @@ After deployment, test with:
         goal = result.scalar_one()
 
         # This should WORK (reading through getter):
-        print(f"Goal status: {goal.status}")
+        logger.info(f"Goal status: {goal.status}")
 
         # These should ALL FAIL (direct assignment blocked):
         try:
             goal.status = "done"
         except AttributeError as e:
-            print(f"✅ Protection working: {e}")
+            logger.info(f"✅ Protection working: {e}")
 
 """
 
@@ -90,25 +90,25 @@ class _GoalStatusProperty:
 
         if value in forbidden_mutations:
             # This is a HARD BLOCK
-            print(f"\n{'='*70}")
-            print("❌ CRITICAL: DIRECT STATUS MUTATION BLOCKED")
-            print(f"{'='*70}")
-            print(f"  Goal ID: {goal_id}")
-            print(f"  Type: {goal_type}")
-            print(f"  Attempted: status = '{value}'")
-            print(f"  Old value: {old_value}")
-            print("")
-            print("  DIRECT STATUS ASSIGNMENT IS FORBIDDEN")
-            print("  Use: goal_transition_service.transition_goal()")
-            print("")
-            print("  STACK TRACE:")
-            print("-" * 70)
+            logger.info(f"\n{'='*70}")
+            logger.info("❌ CRITICAL: DIRECT STATUS MUTATION BLOCKED")
+            logger.info(f"{'='*70}")
+            logger.info(f"  Goal ID: {goal_id}")
+            logger.info(f"  Type: {goal_type}")
+            logger.info(f"  Attempted: status = '{value}'")
+            logger.info(f"  Old value: {old_value}")
+            logger.info("")
+            logger.info("  DIRECT STATUS ASSIGNMENT IS FORBIDDEN")
+            logger.info("  Use: goal_transition_service.transition_goal()")
+            logger.info("")
+            logger.info("  STACK TRACE:")
+            logger.info("-" * 70)
 
             import traceback
             traceback.print_stack()
-            print("-" * 70)
-            print("")
-            print(f"{'='*70}\n")
+            logger.info("-" * 70)
+            logger.info("")
+            logger.info(f"{'='*70}\n")
 
             # LOG to audit
             from audit_logger import audit_logger
@@ -133,7 +133,7 @@ class _GoalStatusProperty:
 
         # ALLOWED mutations (not "done")
         # These are only for internal use by transition service
-        print(f"⚠️  ORM: Allowing status change to '{value}' for goal {goal_id}")
+        logger.info(f"⚠️  ORM: Allowing status change to '{value}' for goal {goal_id}")
 
         # Set to internal field
         setattr(goal, '_status', value)
@@ -194,13 +194,13 @@ async def test():
         g = result.scalar_one()
 
         # This SHOULD work:
-        print(f'Status: {g.status}')
+        logger.info(f'Status: {g.status}')
 
         # This SHOULD fail:
         try:
             g.status = 'done'
         except AttributeError as e:
-            print(f'Protection: {str(e)[:50]}...')
+            logger.info(f'Protection: {str(e)[:50]}...')
 
 asyncio.run(test())
 "
@@ -215,4 +215,4 @@ docker restart ns_core
 
 """
 
-print(__doc__)
+logger.info(__doc__)

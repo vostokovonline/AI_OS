@@ -93,7 +93,7 @@ class SkillRegistry:
                 self.load_from_yaml(str(yaml_file))
                 count += 1
             except Exception as e:
-                print(f"⚠️ Failed to load {yaml_file}: {e}")
+                logger.info(f"⚠️ Failed to load {yaml_file}: {e}")
 
         return count
 
@@ -344,4 +344,4 @@ def init_skill_system():
     skill_registry.load_builtin()
     global skill_executor
     skill_executor = SkillExecutor(skill_registry)
-    print(f"✅ Skill system initialized with {len(skill_registry.list_names())} skills")
+    logger.info(f"✅ Skill system initialized with {len(skill_registry.list_names())} skills")

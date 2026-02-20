@@ -135,11 +135,11 @@ class AuditLogger:
                 db.add(transition_record)
                 await db.commit()
 
-                print(f"✅ [AUDIT] Transition logged: {goal_id[:8]}... | {from_state} -> {to_state} | by {actor}")
+                logger.info(f"✅ [AUDIT] Transition logged: {goal_id[:8]}... | {from_state} -> {to_state} | by {actor}")
 
         except Exception as e:
             # Don't fail transition if audit logging fails
-            print(f"⚠️  [AUDIT] Failed to log transition: {e}")
+            logger.info(f"⚠️  [AUDIT] Failed to log transition: {e}")
             # Still return entry for in-memory tracking
 
         return entry

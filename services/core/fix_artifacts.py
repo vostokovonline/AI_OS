@@ -22,7 +22,7 @@ async def fix_knowledge_artifacts():
         result = await db.execute(stmt)
         artifacts = result.scalars().all()
 
-        print(f"Found {len(artifacts)} KNOWLEDGE artifacts with content_kind='file'")
+        logger.info(f"Found {len(artifacts)} KNOWLEDGE artifacts with content_kind='file'")
 
         fixed_count = 0
         for artifact in artifacts:
@@ -30,12 +30,12 @@ async def fix_knowledge_artifacts():
             artifact.content_kind = "db"
             fixed_count += 1
 
-            print(f"✅ Fixed artifact {artifact.id} (created: {artifact.created_at})")
+            logger.info(f"✅ Fixed artifact {artifact.id} (created: {artifact.created_at})")
 
         # Commit changes
         await db.commit()
 
-        print(f"\n✅ Successfully fixed {fixed_count} artifacts")
+        logger.info(f"\n✅ Successfully fixed {fixed_count} artifacts")
 
         # Verify the fix
         verify_stmt = select(Artifact).where(
@@ -46,7 +46,7 @@ async def fix_knowledge_artifacts():
         verify_result = await db.execute(verify_stmt)
         db_artifacts = verify_result.scalars().all()
 
-        print(f"\n📊 Verification: {len(db_artifacts)} KNOWLEDGE artifacts now have content_kind='db'")
+        logger.info(f"\n📊 Verification: {len(db_artifacts)} KNOWLEDGE artifacts now have content_kind='db'")
 
         # Count remaining file artifacts
         file_stmt = select(Artifact).where(
@@ -57,7 +57,7 @@ async def fix_knowledge_artifacts():
         file_artifacts = file_result.scalars().all()
 
         if file_artifacts:
-            print(f"⚠️  Still {len(file_artifacts)} KNOWLEDGE artifacts with content_kind='file' (non-web_research)")
+            logger.info(f"⚠️  Still {len(file_artifacts)} KNOWLEDGE artifacts with content_kind='file' (non-web_research)")
 
 if __name__ == "__main__":
     asyncio.run(fix_knowledge_artifacts())

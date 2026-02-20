@@ -239,17 +239,17 @@ if __name__ == "__main__":
     import asyncio
 
     async def test():
-        print("Testing Auto Decomposer...\n")
+        logger.info("Testing Auto Decomposer...\n")
 
         # Test 1: Scan for stuck goals
         report = await auto_decomposer.scan_and_decompose_stuck_goals()
 
         logger.info("emergency_decomposition_start")
-        print(f"AUTO-DECOMPOSE REPORT")
-        print(f"{'='*70}")
-        print(f"Scanned: {report['scanned']}")
-        print(f"Decomposed: {report['decomposed']}")
-        print(f"Skipped: {report['skipped']}")
-        print(f"Failed: {report['failed']}")
+        logger.info(f"AUTO-DECOMPOSE REPORT")
+        logger.info(f"{'='*70}")
+        logger.info(f"Scanned: {report['scanned']}")
+        logger.info(f"Decomposed: {report['decomposed']}")
+        logger.info(f"Skipped: {report['skipped']}")
+        logger.info(f"Failed: {report['failed']}")
 
     asyncio.run(test())

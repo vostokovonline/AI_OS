@@ -11,7 +11,7 @@ BASE_URL = "http://localhost:8000"
 
 def test_mcl_allows_vector_in_exploration():
     """Test: MCL allows vector operations in exploration mode"""
-    print("\n[TEST 1] MCL allows vector.apply in exploration mode")
+    logger.info("\n[TEST 1] MCL allows vector.apply in exploration mode")
 
     # Set mode to exploration
     requests.post(
@@ -24,13 +24,13 @@ def test_mcl_allows_vector_in_exploration():
     ops = response.json()["operations"]
 
     assert "vector.apply" in ops["allowed"], "vector.apply should be allowed in exploration"
-    print(f"  ✓ vector.apply is ALLOWED in exploration mode")
-    print(f"  ✓ MCL check: PASS")
+    logger.info(f"  ✓ vector.apply is ALLOWED in exploration mode")
+    logger.info(f"  ✓ MCL check: PASS")
 
 
 def test_mcl_blocks_vector_in_preservation():
     """Test: MCL blocks vector operations in preservation mode"""
-    print("\n[TEST 2] MCL blocks vector.apply in preservation mode")
+    logger.info("\n[TEST 2] MCL blocks vector.apply in preservation mode")
 
     # Set mode to preservation
     requests.post(
@@ -43,13 +43,13 @@ def test_mcl_blocks_vector_in_preservation():
     ops = response.json()["operations"]
 
     assert "vector.apply" in ops["forbidden"], "vector.apply should be forbidden in preservation"
-    print(f"  ✓ vector.apply is FORBIDDEN in preservation mode")
-    print(f"  ✓ MCL veto: ACTIVE")
+    logger.info(f"  ✓ vector.apply is FORBIDDEN in preservation mode")
+    logger.info(f"  ✓ MCL veto: ACTIVE")
 
 
 def test_sk_veto_over_mcl():
     """Test: SK veto overrides MCL permission"""
-    print("\n[TEST 3] SK veto overrides MCL (SK > MCL)")
+    logger.info("\n[TEST 3] SK veto overrides MCL (SK > MCL)")
 
     # Set MCL to exploration (allows vector.apply)
     requests.post(
@@ -67,15 +67,15 @@ def test_sk_veto_over_mcl():
         }
     )
 
-    print(f"  ✓ MCL mode: exploration (allows vector.apply)")
-    print(f"  ✓ SK signal: mission_drift = 0.8 (threshold: 0.6)")
-    print(f"  ✓ SK-001 triggered: forbid vector.apply")
-    print(f"  ✓ SK veto > MCL permission")
+    logger.info(f"  ✓ MCL mode: exploration (allows vector.apply)")
+    logger.info(f"  ✓ SK signal: mission_drift = 0.8 (threshold: 0.6)")
+    logger.info(f"  ✓ SK-001 triggered: forbid vector.apply")
+    logger.info(f"  ✓ SK veto > MCL permission")
 
 
 def test_sk_prevents_critical_drift():
     """Test: SK prevents operations during critical system state"""
-    print("\n[TEST 4] SK prevents operations during critical drift")
+    logger.info("\n[TEST 4] SK prevents operations during critical drift")
 
     # Test all normative SK rules
     test_cases = [
@@ -96,49 +96,49 @@ def test_sk_prevents_critical_drift():
             }
         )
 
-        print(f"  ✓ {rule_id}: {signal} {op} {threshold} (recorded: {value})")
+        logger.info(f"  ✓ {rule_id}: {signal} {op} {threshold} (recorded: {value})")
 
-    print(f"  ✓ All 4 SK rules active")
+    logger.info(f"  ✓ All 4 SK rules active")
 
 
 def test_override_hierarchy():
     """Test: Full override hierarchy SK > MCL > Vector"""
-    print("\n[TEST 5] Full override hierarchy verification")
+    logger.info("\n[TEST 5] Full override hierarchy verification")
 
     # Level 1: Vector Engine (base level)
-    print(f"  Level 1: Vector Engine")
-    print(f"    - Transformation operators")
-    print(f"    - NO built-in restrictions")
+    logger.info(f"  Level 1: Vector Engine")
+    logger.info(f"    - Transformation operators")
+    logger.info(f"    - NO built-in restrictions")
 
     # Level 2: MCL (above Vector)
-    print(f"\n  Level 2: MCL > Vector")
+    logger.info(f"\n  Level 2: MCL > Vector")
     requests.post(
         f"{BASE_URL}/occp/mcl/set-mode",
         json={"mode": "preservation", "rationale": "Hierarchy test"}
     )
     response = requests.get(f"{BASE_URL}/occp/mcl/allowed-operations")
     ops = response.json()["operations"]
-    print(f"    - MCL in preservation mode")
-    print(f"    - Forbidden: {len(ops['forbidden'])} operations")
-    print(f"    - MCL can block Vector")
+    logger.info(f"    - MCL in preservation mode")
+    logger.info(f"    - Forbidden: {len(ops['forbidden'])} operations")
+    logger.info(f"    - MCL can block Vector")
 
     # Level 3: SK (above MCL)
-    print(f"\n  Level 3: SK > MCL > Vector")
-    print(f"    - SK has absolute veto authority")
-    print(f"    - Can override MCL decisions")
-    print(f"    - Can block ANY operation")
+    logger.info(f"\n  Level 3: SK > MCL > Vector")
+    logger.info(f"    - SK has absolute veto authority")
+    logger.info(f"    - Can override MCL decisions")
+    logger.info(f"    - Can block ANY operation")
 
     # Verify SK is active
     response = requests.get(f"{BASE_URL}/occp/sk/kernel")
     kernel = response.json()["kernel"]
-    print(f"    - SK v{kernel['version']}: {kernel['authority_level']} authority")
+    logger.info(f"    - SK v{kernel['version']}: {kernel['authority_level']} authority")
 
-    print(f"\n  ✓ Hierarchy verified: SK > MCL > Vector > Execution")
+    logger.info(f"\n  ✓ Hierarchy verified: SK > MCL > Vector > Execution")
 
 
 def test_occp_compliance():
     """Test: Full OCCP Draft 0.1 compliance"""
-    print("\n[TEST 6] OCCP Draft 0.1 compliance")
+    logger.info("\n[TEST 6] OCCP Draft 0.1 compliance")
 
     compliance_checks = {
         "mcl_exists": False,
@@ -151,20 +151,20 @@ def test_occp_compliance():
     response = requests.get(f"{BASE_URL}/occp/mcl/state")
     if response.json()["state"]:
         compliance_checks["mcl_exists"] = True
-        print(f"  ✓ MCL exists as stateful layer")
+        logger.info(f"  ✓ MCL exists as stateful layer")
 
     # Check SK veto authority
     response = requests.get(f"{BASE_URL}/occp/sk/rules")
     if response.json()["count"] > 0:
         compliance_checks["sk_veto_authority"] = True
-        print(f"  ✓ SK has veto authority ({response.json()['count']} rules)")
+        logger.info(f"  ✓ SK has veto authority ({response.json()['count']} rules)")
 
     # Check drift measurement
     response = requests.get(f"{BASE_URL}/occp/mcl/state")
     state = response.json()["state"]
     if "drift_score" in state:
         compliance_checks["drift_measured"] = True
-        print(f"  ✓ Drift is measured: {state['drift_score']}")
+        logger.info(f"  ✓ Drift is measured: {state['drift_score']}")
 
     # Check system can halt intentionally
     requests.post(
@@ -175,23 +175,23 @@ def test_occp_compliance():
     ops = response.json()["operations"]
     if len(ops["forbidden"]) > 0:
         compliance_checks["can_halt_intentionally"] = True
-        print(f"  ✓ System can halt intentionally (forbids {len(ops['forbidden'])} ops)")
+        logger.info(f"  ✓ System can halt intentionally (forbids {len(ops['forbidden'])} ops)")
 
     all_passed = all(compliance_checks.values())
-    print(f"\n  Compliance: {sum(compliance_checks.values())}/4 checks passed")
+    logger.info(f"\n  Compliance: {sum(compliance_checks.values())}/4 checks passed")
 
     if all_passed:
-        print(f"  ✅ OCCP DRAFT 0.1 COMPLIANT")
+        logger.info(f"  ✅ OCCP DRAFT 0.1 COMPLIANT")
     else:
         failed = [k for k, v in compliance_checks.items() if not v]
-        print(f"  ❌ FAILED: {', '.join(failed)}")
+        logger.info(f"  ❌ FAILED: {', '.join(failed)}")
 
 
 def main():
-    print("=" * 70)
-    print("OCCP OVERRIDE HIERARCHY TEST")
-    print("Verifies: SK > MCL > Vector > Execution")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("OCCP OVERRIDE HIERARCHY TEST")
+    logger.info("Verifies: SK > MCL > Vector > Execution")
+    logger.info("=" * 70)
 
     try:
         test_mcl_allows_vector_in_exploration()
@@ -201,24 +201,24 @@ def main():
         test_override_hierarchy()
         test_occp_compliance()
 
-        print("\n" + "=" * 70)
-        print("ALL HIERARCHY TESTS PASSED")
-        print("=" * 70)
-        print("\n🎯 OCCP Draft 0.1 implementation verified:")
-        print("   - MCL manages cognitive modes (exploration/exploitation/preservation)")
-        print("   - SK has absolute veto authority")
-        print("   - Override hierarchy: SK > MCL > Vector > Execution")
-        print("   - System can halt intentionally")
-        print("   - Drift is continuously measured")
-        print("   - All decisions are audited")
+        logger.info("\n" + "=" * 70)
+        logger.info("ALL HIERARCHY TESTS PASSED")
+        logger.info("=" * 70)
+        logger.info("\n🎯 OCCP Draft 0.1 implementation verified:")
+        logger.info("   - MCL manages cognitive modes (exploration/exploitation/preservation)")
+        logger.info("   - SK has absolute veto authority")
+        logger.info("   - Override hierarchy: SK > MCL > Vector > Execution")
+        logger.info("   - System can halt intentionally")
+        logger.info("   - Drift is continuously measured")
+        logger.info("   - All decisions are audited")
 
         return 0
 
     except AssertionError as e:
-        print(f"\n❌ TEST FAILED: {e}")
+        logger.info(f"\n❌ TEST FAILED: {e}")
         return 1
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        logger.info(f"\n❌ ERROR: {e}")
         import traceback
         traceback.print_exc()
         return 1

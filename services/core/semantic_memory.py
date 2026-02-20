@@ -1,16 +1,23 @@
 """
 SEMANTIC MEMORY - v3.0
-Извлечение и хранение паттернов принятия решений
+Излечение и хранение паттернов принятия решений
 Memory ≠ Logs - это не просто логи, а извлеченные знания
+
+v3.1: Added Milvus vector search integration
 """
 import uuid
+import os
+import json
+import httpx
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from langchain_core.messages import HumanMessage
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from database import AsyncSessionLocal
-from models import Goal
+from models import Goal, Thought
 from agent_graph import app_graph
+
+MEMORY_URL = os.getenv("MEMORY_URL", "http://memory:8001")
 
 
 class SemanticMemory:
@@ -62,8 +69,14 @@ class SemanticMemory:
             db.add(thought)
             await db.commit()
             await db.refresh(thought)
+            
+            pattern_id = str(thought.id)
+            
+            # 🆕 Also store in Milvus for vector search
+            content["confidence"] = confidence
+            await self.store_pattern_vector(pattern_type, content, pattern_id)
 
-            return str(thought.id)
+            return pattern_id
 
     async def extract_success_pattern(self, goal_id: str, reflection: Dict) -> Dict:
         """
@@ -362,6 +375,153 @@ class SemanticMemory:
         }
 
         return recommendations
+
+    async def store_pattern_vector(
+        self,
+        pattern_type: str,
+        content: Dict,
+        pattern_id: str
+    ) -> bool:
+        """
+        Сохраняет паттерн в Milvus для векторного поиска.
+        
+        Args:
+            pattern_type: Тип паттерна
+            content: Содержимое паттерна
+            pattern_id: ID паттерна из PostgreSQL
+            
+        Returns:
+            True если успешно, False иначе
+        """
+        try:
+            # Создаём текстовое представление для embedding
+            text_repr = self._pattern_to_text(pattern_type, content)
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{MEMORY_URL}/remember",
+                    json={
+                        "text": text_repr,
+                        "type": "semantic",
+                        "metadata": {
+                            "pattern_id": pattern_id,
+                            "pattern_type": pattern_type,
+                            "goal_type": content.get("goal_type"),
+                            "domains": content.get("domains", []),
+                            "confidence": content.get("confidence", 0.5)
+                        }
+                    }
+                )
+                return response.status_code == 200
+        except Exception as e:
+            logger.info(f"⚠️ Milvus store error: {e}")
+            return False
+
+    async def retrieve_similar_patterns_vector(
+        self,
+        query_text: str,
+        limit: int = 5
+    ) -> List[Dict]:
+        """
+        Извлекает похожие паттерны из Milvus по векторному сходству.
+        
+        Args:
+            query_text: Текст для поиска
+            limit: Максимум результатов
+            
+        Returns:
+            Список похожих паттернов
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{MEMORY_URL}/search",
+                    json={
+                        "text": query_text,
+                        "type": "semantic",
+                        "top_k": limit
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    matches = data.get("matches", [])
+                    
+                    results = []
+                    for match in matches:
+                        try:
+                            # Пытаемся распарсить как JSON
+                            if isinstance(match, str) and match.startswith("{"):
+                                pattern = json.loads(match)
+                                results.append(pattern)
+                        except:
+                            continue
+                    
+                    return results
+        except Exception as e:
+            logger.info(f"⚠️ Milvus search error: {e}")
+        
+        return []
+
+    async def cleanup_old_patterns(self, days: int = 30) -> int:
+        """
+        Удаляет старые паттерны с low confidence.
+        
+        Args:
+            days: Удалить паттерны старше N дней
+            
+        Returns:
+            Количество удалённых паттернов
+        """
+        async with AsyncSessionLocal() as db:
+            cutoff = datetime.now() - timedelta(days=days)
+            
+            # Удаляем tentative паттерны старше cutoff
+            stmt = delete(Thought).where(
+                Thought.status == "tentative",
+                Thought.created_at < cutoff
+            )
+            
+            result = await db.execute(stmt)
+            await db.commit()
+            
+            deleted_count = result.rowcount
+            logger.info(f"🧹 Cleaned up {deleted_count} old patterns")
+            
+            return deleted_count
+
+    def _pattern_to_text(self, pattern_type: str, content: Dict) -> str:
+        """
+        Преобразует паттерн в текст для embedding.
+        
+        Args:
+            pattern_type: Тип паттерна
+            content: Содержимое паттерна
+            
+        Returns:
+            Текстовое представление
+        """
+        parts = [f"Pattern type: {pattern_type}"]
+        
+        if "goal_type" in content:
+            parts.append(f"Goal type: {content['goal_type']}")
+        
+        if "domains" in content:
+            parts.append(f"Domains: {', '.join(content['domains'])}")
+        
+        if "success_factors" in content:
+            parts.append(f"Success factors: {', '.join(content['success_factors'])}")
+        
+        if "lessons_learned" in content:
+            parts.append(f"Lessons: {', '.join(content['lessons_learned'])}")
+        
+        if "root_causes" in content:
+            parts.append(f"Root causes: {', '.join(content['root_causes'])}")
+        
+        if "mistakes" in content:
+            parts.append(f"Mistakes: {', '.join(content['mistakes'])}")
+        
+        return " | ".join(parts)
 
 
 # Глобальный экземпляр

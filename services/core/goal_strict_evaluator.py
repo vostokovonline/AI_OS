@@ -5,6 +5,7 @@ GOAL STRICT EVALUATOR - v3.0
 
 ARCHITECTURE v3.0:
 - Uses UnitOfWork pattern for transaction management
+- Integrates EmotionalFeedbackLoop for memory
 """
 import uuid
 from typing import Dict, Optional
@@ -18,6 +19,7 @@ from agent_graph import app_graph
 from goal_contract_validator import goal_contract_validator
 from infrastructure.uow import UnitOfWork, GoalRepository
 from goal_transition_service import transition_service
+from emotional_feedback_loop import emotional_feedback_loop
 
 
 class GoalStrictEvaluator:
@@ -94,6 +96,30 @@ class GoalStrictEvaluator:
 
         if parent.completion_mode == 'strict':
             return
+
+    async def _record_completion(self, goal: Goal, passed: bool, score: float = 1.0):
+        """
+        Record goal completion to EmotionalFeedbackLoop.
+        
+        This integrates memory system with goal lifecycle.
+        """
+        try:
+            outcome = "success" if passed else "failure"
+            user_id = str(goal.user_id) if hasattr(goal, 'user_id') and goal.user_id else "system"
+            
+            await emotional_feedback_loop.record_goal_completion(
+                goal_id=str(goal.id),
+                user_id=user_id,
+                outcome=outcome,
+                metrics={
+                    "score": score,
+                    "goal_type": goal.goal_type,
+                    "is_atomic": goal.is_atomic,
+                    "depth_level": goal.depth_level
+                }
+            )
+        except Exception as e:
+            logger.info(f"⚠️ EmotionalFeedbackLoop error for goal {goal.id}: {e}")
 
 
     async def evaluate_goal(self, goal_id: str) -> Dict:
@@ -193,6 +219,9 @@ class GoalStrictEvaluator:
                         g.status = "done"
                         g.progress = 1.0
                         g.completed_at = datetime.now()
+                        
+                        # 🧠 MEMORY: Record to EmotionalFeedbackLoop
+                        await self._record_completion(g, passed=True, score=1.0)
                     await db.commit()
 
                     # 🔒 STATE-MACHINE: Check if parent should be completed
@@ -269,6 +298,9 @@ class GoalStrictEvaluator:
                     if passed:
                         g.status = "done"
                         g.completed_at = datetime.now()
+                        
+                        # 🧠 MEMORY: Record to EmotionalFeedbackLoop
+                        await self._record_completion(g, passed=True, score=score)
                     await db.commit()
 
                     # 🔒 STATE-MACHINE: Check if parent should be completed

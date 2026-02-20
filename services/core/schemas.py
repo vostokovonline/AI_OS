@@ -356,3 +356,51 @@ class GoalApprovalSuccess(BaseModel):
     approved_at: str
     approved_by: str
     authority_level: int
+
+
+# =============================================================================
+# Bulk Transition Schemas (UoW Pattern)
+# =============================================================================
+
+class BulkTransitionRequest(BaseModel):
+    """Request body for bulk goal transitions"""
+    goal_ids: List[str] = Field(..., min_length=1, max_length=1000, description="List of goal IDs to transition")
+    new_state: str = Field(..., description="Target state: pending, active, done, frozen, archived")
+    reason: str = Field(default="Bulk operation", max_length=500, description="Reason for transition")
+    actor: str = Field(default="system", max_length=100, description="Who initiated the transition")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "goal_ids": ["uuid-1", "uuid-2", "uuid-3"],
+                "new_state": "active",
+                "reason": "Mass activation for Q1 sprint",
+                "actor": "admin:user:123"
+            }
+        }
+
+
+class BulkTransitionResponse(BaseModel):
+    """Response after bulk transition"""
+    total: int = Field(..., description="Total goals requested")
+    found: int = Field(..., description="Goals found in database")
+    succeeded: int = Field(..., description="Successfully transitioned")
+    failed: int = Field(..., description="Failed or blocked")
+    results: List[Dict[str, Any]] = Field(..., description="Individual results per goal")
+    timestamp: str = Field(..., description="Operation timestamp")
+
+
+class FreezeTreeRequest(BaseModel):
+    """Request body for freezing a goal tree"""
+    root_goal_id: str = Field(..., description="Root goal ID")
+    reason: str = Field(default="Tree frozen", max_length=500, description="Reason for freeze")
+    actor: str = Field(default="system", max_length=100, description="Who initiated the freeze")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "root_goal_id": "uuid-root",
+                "reason": "Project paused for review",
+                "actor": "admin:user:456"
+            }
+        }

@@ -472,7 +472,7 @@ class OCCPGateway:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except Exception as e:
             # Log failure but don't fail the request
-            print(f"Warning: Failed to write audit log: {e}")
+            logger.info(f"Warning: Failed to write audit log: {e}")
 
     def _create_audit_entry(self, request, decisions, result):
         """
