@@ -311,7 +311,11 @@ class SemanticMemory:
                     if len(patterns) >= limit:
                         break
 
-                except:
+                except (ValueError, KeyError, json.JSONDecodeError) as e:
+                    logger.debug("pattern_parse_error", thought_id=str(thought.id), error=str(e))
+                    continue
+                except Exception as e:
+                    logger.warning("unexpected_pattern_error", thought_id=str(thought.id), error=str(e))
                     continue
 
             return patterns
@@ -454,7 +458,11 @@ class SemanticMemory:
                             if isinstance(match, str) and match.startswith("{"):
                                 pattern = json.loads(match)
                                 results.append(pattern)
-                        except:
+                        except json.JSONDecodeError as e:
+                            logger.debug("milvus_match_json_error", match=match[:100], error=str(e))
+                            continue
+                        except Exception as e:
+                            logger.warning("milvus_match_error", match=match[:100], error=str(e))
                             continue
                     
                     return results

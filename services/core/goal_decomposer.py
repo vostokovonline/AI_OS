@@ -611,8 +611,10 @@ class GoalDecomposer:
                     json={"message": full_message},
                     timeout=5
                 )
-        except:
-            pass
+        except httpx.HTTPError as e:
+            logger.debug("telegram_notification_http_error", error=str(e))
+        except Exception as e:
+            logger.warning("telegram_notification_failed", error=str(e))
 
 
 # Глобальный экземпляр

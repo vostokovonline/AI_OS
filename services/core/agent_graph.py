@@ -80,8 +80,10 @@ def extract_next_agent(llm_output: str) -> str:
         try:
             data = json.loads(json_match.group(1))
             return data.get("next_node", "FINISH")
-        except:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug("json_decode_error", error=str(e))
+        except Exception as e:
+            logger.warning("unexpected_error_parsing_json", error=str(e))
             
     # 3. Эвристический поиск, если JSON сломан (DeepSeek иногда пишет просто: "Decision: Researcher")
     if "Researcher" in text: return "Researcher"

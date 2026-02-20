@@ -372,8 +372,10 @@ class GoalReflector:
                     json={"message": message},
                     timeout=5
                 )
-        except:
-            pass
+        except httpx.HTTPError as e:
+            logger.debug("telegram_notification_http_error", error=str(e))
+        except Exception as e:
+            logger.warning("telegram_notification_failed", error=str(e))
 
     # ============= UoW MIGRATION: Новые атомарные методы =============
 

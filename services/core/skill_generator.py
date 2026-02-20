@@ -564,8 +564,10 @@ Ensure all validation checks pass.
                             skill_registry.register(instance)
                             logger.info(f"   ✅ Skill registered in registry")
                             break
-                    except:
-                        pass
+                    except TypeError as e:
+                        logger.debug("skill_instantiation_failed", skill=attr_name, error=str(e))
+                    except Exception as e:
+                        logger.debug("skill_registration_failed", skill=attr_name, error=str(e))
 
         except Exception as e:
             logger.info(f"   ⚠️  Registry reload: {e}")

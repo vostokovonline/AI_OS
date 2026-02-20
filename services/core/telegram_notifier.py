@@ -33,7 +33,11 @@ class TelegramNotifier:
         try:
             chat_id = self.redis_client.get(f"telegram:user_chat:{user_id}")
             return chat_id is not None
-        except:
+        except redis.RedisError as e:
+            logger.debug("redis_error_checking_user_link", user_id=user_id, error=str(e))
+            return False
+        except Exception as e:
+            logger.warning("unexpected_error_checking_user_link", user_id=user_id, error=str(e))
             return False
 
     async def send_question(self, user_id: str, question_data: Dict[str, Any]) -> bool:

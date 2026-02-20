@@ -60,7 +60,8 @@ async def run_python_code(code: str, session_id: str = "default"):
         await release_lock("compute")
         try:
              await log_action(session_id, "CODER", "run_python", code[:100], "", status, start)
-        except: pass
+        except Exception as e:
+            logger.error("log_action_failed", error=str(e))
 
 @tool
 async def browse_web(url: str):
@@ -87,7 +88,8 @@ async def browse_web(url: str):
         await release_lock("browser")
         try:
              await log_action("unknown", "RESEARCHER", "browse_web", url, "", status, start)
-        except: pass
+        except Exception as e:
+            logger.error("log_action_failed", error=str(e))
 
 @tool
 async def ask_web_llm(provider: str, prompt: str):
@@ -107,8 +109,12 @@ async def ask_web_llm(provider: str, prompt: str):
 async def send_notification(message: str):
     """Sends a notification to Telegram."""
     async with httpx.AsyncClient() as client:
-        try: await client.post(f"{TELEGRAM_URL}/notify", json={"message": message})
-        except: pass
+        try:
+            await client.post(f"{TELEGRAM_URL}/notify", json={"message": message})
+        except httpx.HTTPError as e:
+            logger.error("notification_http_error", error=str(e))
+        except Exception as e:
+            logger.warning("notification_failed", error=str(e))
     return "Sent."
 
 @tool
@@ -202,9 +208,12 @@ async def update_goal(goal_id: str, status: str, progress: float):
     async with AsyncSessionLocal() as db:
         try:
              uid = uuid.UUID(goal_id)
-        except:
-             return "Invalid UUID format."
-             
+        except ValueError as e:
+            return "Invalid UUID format."
+        except Exception as e:
+            logger.error("uuid_parse_error", error=str(e))
+            return "Invalid UUID format."
+
         stmt = select(Goal).where(Goal.id == uid)
         g = (await db.execute(stmt)).scalar_one_or_none()
         if g:

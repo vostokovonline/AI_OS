@@ -88,7 +88,12 @@ async def wait_for_db():
                 await conn.execute(text("SELECT 1"))
             logger.info("✅ Database Connected!")
             break
-        except: await asyncio.sleep(2)
+        except sqlalchemy.exc.DBAPIError as e:
+            logger.debug("database_connection_retry", error=str(e))
+            await asyncio.sleep(2)
+        except Exception as e:
+            logger.error("database_connection_failed", error=str(e))
+            await asyncio.sleep(2)
 
 @app.on_event("startup")
 async def startup():

@@ -2,8 +2,11 @@ import os, asyncio, httpx, smtplib, subprocess
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from langchain_core.tools import tool
-from github import Github
+from github import Github, GithubException
 from duckduckgo_search import DDGS
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 @tool
 def github_action(action: str, repo_name: str, path: str = "", content: str = "", branch: str = "main"):
@@ -18,9 +21,13 @@ def github_action(action: str, repo_name: str, path: str = "", content: str = ""
             try:
                 repo.update_file(path, "Update", content, repo.get_contents(path).sha, branch=branch)
                 return "Updated"
-            except:
+            except GithubException as e:
+                logger.debug("github_file_not_found", error=str(e))
                 repo.create_file(path, "Create", content, branch=branch)
                 return "Created"
+            except Exception as e:
+                logger.error("github_update_error", error=str(e))
+                return f"GitHub Error: {str(e)}"
         elif action == "create_issue": return f"Issue: {repo.create_issue(title=path, body=content).html_url}"
         return "Unknown action"
     except Exception as e: return f"GitHub Error: {e}"
@@ -344,10 +351,14 @@ async def deploy_website(html_code: str, repo_name: str, path: str = "index.html
             contents = repo.get_contents(path)
             repo.update_file(path, "Update website", html_code, contents.sha)
             action = "updated"
-        except:
+        except GithubException as e:
+            logger.debug("github_file_not_found_for_deploy", error=str(e))
             # Create new file
             repo.create_file(path, "Create website", html_code)
             action = "created"
+        except Exception as e:
+            logger.error("github_deploy_error", error=str(e))
+            return f"❌ Deployment failed: {str(e)}"
 
         # Get GitHub Pages URL
         pages_url = f"https://{repo.owner.login}.github.io/{repo_name}/"

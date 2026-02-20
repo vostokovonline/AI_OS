@@ -370,7 +370,8 @@ class EmotionalForecastingModel:
                 return "deep_goal_decomposition"
             else:
                 return "complex_execution"
-        except:
+        except Exception as e:
+            logger.debug("infer_action_type_failed", goal_id=str(goal_id), error=str(e))
             return "unknown"
 
     def _get_feature_names(self) -> List[str]:
@@ -495,5 +496,8 @@ emotional_forecasting_model = EmotionalForecastingModel()
 # Попытка загрузить при импорте
 try:
     emotional_forecasting_model.load()
-except:
+except FileNotFoundError:
+    pass  # Model not trained yet, that's ok
+except Exception as e:
+    logger.debug("model_load_failed_on_import", error=str(e))
     pass  # Model not trained yet, that's ok

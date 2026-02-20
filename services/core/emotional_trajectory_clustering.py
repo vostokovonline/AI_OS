@@ -240,7 +240,8 @@ class TrajectoryExtractor:
             else:
                 return "complex_execution"
 
-        except:
+        except Exception as e:
+            logger.debug("infer_action_type_failed", goal_id=str(goal_id), error=str(e))
             return "unknown"
 
 

@@ -281,7 +281,8 @@ class ComputeAssistSandbox(SandboxExecutor):
 
         try:
             func()
-        except:
+        except Exception as e:
+            logger.debug("timed_function_error", error=str(e))
             pass  # Error handled elsewhere
 
         end = datetime.utcnow()
