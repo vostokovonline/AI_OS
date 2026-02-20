@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 LLM Fallback Manager - Умное переключение между LLM при rate limits
 Предотвращает ошибки 404 от Groq путем переключения на fallback модель
@@ -88,7 +91,7 @@ class LLMFallbackManager:
         if time.time() > disabled_until_ts:
             # Cooldown истек, можно возвращаться к Groq
             await async_redis.delete(GROQ_DISABLED_KEY, GROQ_FAILURE_KEY)
-            print(f"✅ Groq cooldown expired, switching back to Groq")
+            logger.info(f"✅ Groq cooldown expired, switching back to Groq")
             return True
 
         return False
@@ -101,8 +104,8 @@ class LLMFallbackManager:
         await async_redis.set(GROQ_FAILURE_KEY, str(now))
         await async_redis.set(GROQ_DISABLED_KEY, str(disabled_until), ex=GROQ_COOLDOWN_HOURS * 3600 + 60)
 
-        print(f"⚠️ Groq marked as FAILED for {GROQ_COOLDOWN_HOURS} hours")
-        print(f"   Disabled until: {datetime.fromtimestamp(disabled_until).isoformat()}")
+        logger.info(f"⚠️ Groq marked as FAILED for {GROQ_COOLDOWN_HOURS} hours")
+        logger.info(f"   Disabled until: {datetime.fromtimestamp(disabled_until).isoformat()}")
 
     async def chat_completion(
         self,
@@ -117,7 +120,7 @@ class LLMFallbackManager:
         is_groq_model = "groq" in model.lower()
 
         if is_groq_model and not await self.is_groq_available():
-            print(f"⏳ Groq is in cooldown, using fallback: {FALLBACK_MODEL}")
+            logger.info(f"⏳ Groq is in cooldown, using fallback: {FALLBACK_MODEL}")
             model = FALLBACK_MODEL
             if "ollama" in FALLBACK_MODEL:
                 kwargs["api_base"] = FALLBACK_API_BASE
@@ -142,7 +145,7 @@ class LLMFallbackManager:
                 response.raise_for_status()
                 result = response.json()
                 model_used = result.get("model", model)
-                print(f"✅ LLM call successful: {model_used}")
+                logger.info(f"✅ LLM call successful: {model_used}")
                 return result
 
         except httpx.HTTPStatusError as e:
@@ -151,11 +154,11 @@ class LLMFallbackManager:
             # Детектируем 404 ошибку от Groq (rate limit)
             if e.response.status_code == 404 and "groq" in model.lower():
                 if "GroqException" in error_text or "404 page not found" in error_text:
-                    print(f"❌ Groq 404 error detected - rate limit hit!")
+                    logger.info(f"❌ Groq 404 error detected - rate limit hit!")
                     await self.mark_groq_failed()
 
                     # Retry с fallback моделью
-                    print(f"🔄 Retrying with fallback: {FALLBACK_MODEL}")
+                    logger.info(f"🔄 Retrying with fallback: {FALLBACK_MODEL}")
 
                     # Меняем модель на fallback
                     payload["model"] = FALLBACK_MODEL
@@ -167,11 +170,11 @@ class LLMFallbackManager:
                         response.raise_for_status()
                         result = response.json()
                         model_used = result.get("model", FALLBACK_MODEL)
-                        print(f"✅ Fallback LLM call successful: {model_used}")
+                        logger.info(f"✅ Fallback LLM call successful: {model_used}")
                         return result
 
             # Другие ошибки пробрасываем дальше
-            print(f"❌ LLM API error: {e.response.status_code} - {error_text[:200]}")
+            logger.info(f"❌ LLM API error: {e.response.status_code} - {error_text[:200]}")
             raise
 
     async def get_status(self) -> Dict[str, Any]:
@@ -224,13 +227,13 @@ if __name__ == "__main__":
 
         # Проверка статуса
         status = await manager.get_status()
-        print(json.dumps(status, indent=2))
+        logger.info(json.dumps(status, indent=2))
 
         # Тест вызова
         result = await manager.chat_completion(
             model="groq/llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": "Say 'Hello World'"}]
         )
-        print(json.dumps(result, indent=2))
+        logger.info(json.dumps(result, indent=2))
 
     asyncio.run(test())

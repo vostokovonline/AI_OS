@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 HARD INVARIANTS v1.0 - ENGINEERING GRADE
 ==========================================
@@ -420,7 +423,7 @@ def get_invariant_violation_summary(exception: HardInvariantViolation) -> Dict:
 # =============================================================================
 
 if __name__ == "__main__":
-    print("Testing HARD Invariants...\n")
+    logger.info("Testing HARD Invariants...\n")
 
     # Mock goal with violation
     class MockGoal:
@@ -436,12 +439,12 @@ if __name__ == "__main__":
 
     try:
         HardInvariants.check_lifecycle_state(goal)
-        print("❌ FAILED: Should have raised exception")
+        logger.info("❌ FAILED: Should have raised exception")
     except HardInvariantViolation as e:
-        print("✅ PASSED: Caught invariant violation")
-        print(f"  Severity: {e.severity}")
-        print(f"  Code: {e.invariant_code}")
-        print(f"  Message: {e.message}")
+        logger.info("✅ PASSED: Caught invariant violation")
+        logger.info(f"  Severity: {e.severity}")
+        logger.info(f"  Code: {e.invariant_code}")
+        logger.info(f"  Message: {e.message}")
 
     # Test artifact check
     try:
@@ -449,8 +452,8 @@ if __name__ == "__main__":
             goal,
             {"goal_complete": False, "total_count": 0, "passed_count": 0}
         )
-        print("❌ FAILED: Should have raised exception")
+        logger.info("❌ FAILED: Should have raised exception")
     except HardInvariantViolation as e:
-        print("✅ PASSED: Caught artifact violation")
-        print(f"  Severity: {e.severity}")
-        print(f"  Message: {e.message}")
+        logger.info("✅ PASSED: Caught artifact violation")
+        logger.info(f"  Severity: {e.severity}")
+        logger.info(f"  Message: {e.message}")

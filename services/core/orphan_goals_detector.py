@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 Orphan Goals Detector
 
@@ -124,28 +127,28 @@ orphan_goals_detector = OrphanGoalsDetector(orphan_age_hours=24)
 
 async def main():
     """Test the detector."""
-    print("🔍 Orphan Goals Detector")
-    print("=" * 50)
+    logger.info("🔍 Orphan Goals Detector")
+    logger.info("=" * 50)
 
     # Get stats
     stats = await orphan_goals_detector.get_orphan_stats()
-    print(f"\n📊 Stats:")
-    print(f"  Total root goals: {stats['total_root_goals']}")
-    print(f"  Recent orphans (<24h): {stats['recent_orphans']}")
-    print(f"  Need context: {stats['orphans_need_context']}")
+    logger.info(f"\n📊 Stats:")
+    logger.info(f"  Total root goals: {stats['total_root_goals']}")
+    logger.info(f"  Recent orphans (<24h): {stats['recent_orphans']}")
+    logger.info(f"  Need context: {stats['orphans_need_context']}")
 
     # Find orphans
     orphans = await orphan_goals_detector.find_orphan_goals(limit=10)
 
     if orphans:
-        print(f"\n🍼 Found {len(orphans)} orphan goals:")
+        logger.info(f"\n🍼 Found {len(orphans)} orphan goals:")
         for orphan in orphans:
-            print(f"\n  📌 {orphan['title']}")
-            print(f"     Type: {orphan['goal_type']}")
-            print(f"     Age: {orphan['age_hours']:.1f} hours")
-            print(f"     Created: {orphan['created_at']}")
+            logger.info(f"\n  📌 {orphan['title']}")
+            logger.info(f"     Type: {orphan['goal_type']}")
+            logger.info(f"     Age: {orphan['age_hours']:.1f} hours")
+            logger.info(f"     Created: {orphan['created_at']}")
     else:
-        print("\n✅ No orphan goals found - all root goals have context!")
+        logger.info("\n✅ No orphan goals found - all root goals have context!")
 
 
 if __name__ == "__main__":

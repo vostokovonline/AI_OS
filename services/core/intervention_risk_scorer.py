@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 INTERVENTION RISK SCORING SYSTEM
 ====================================
@@ -84,7 +87,7 @@ class InterventionRiskScorer:
             intervention = result.scalar_one_or_none()
 
             if not intervention:
-                print(f"⚠️  [RiskScorer] Intervention {intervention_id} not found")
+                logger.info(f"⚠️  [RiskScorer] Intervention {intervention_id} not found")
                 return None
 
             # 2. Compute component scores
@@ -122,18 +125,18 @@ class InterventionRiskScorer:
             db.add(risk_score)
             db.commit()
 
-            print(f"🎯 [RiskScorer] Computed risk score for {intervention.intervention_type}")
-            print(f"   Total risk: {total_risk:.4f} → {risk_tier}")
-            print(f"   Instability: {instability_score:.4f}")
-            print(f"   Data sufficiency: {data_sufficiency:.4f}")
-            print(f"   Alert density: {alert_density:.4f}")
-            print(f"   Arousal exposure: {arousal_exposure:.4f}")
-            print(f"   Scope blast radius: {scope_blast_radius:.4f}")
+            logger.info(f"🎯 [RiskScorer] Computed risk score for {intervention.intervention_type}")
+            logger.info(f"   Total risk: {total_risk:.4f} → {risk_tier}")
+            logger.info(f"   Instability: {instability_score:.4f}")
+            logger.info(f"   Data sufficiency: {data_sufficiency:.4f}")
+            logger.info(f"   Alert density: {alert_density:.4f}")
+            logger.info(f"   Arousal exposure: {arousal_exposure:.4f}")
+            logger.info(f"   Scope blast radius: {scope_blast_radius:.4f}")
 
             return risk_score
 
         except Exception as e:
-            print(f"⚠️  [RiskScorer] Failed to compute risk score: {e}")
+            logger.info(f"⚠️  [RiskScorer] Failed to compute risk score: {e}")
             import traceback
             traceback.print_exc()
             db.rollback()
@@ -188,7 +191,7 @@ class InterventionRiskScorer:
             return 0.3  # Default: moderate instability
 
         except Exception as e:
-            print(f"⚠️  [RiskScorer] Failed to compute instability: {e}")
+            logger.info(f"⚠️  [RiskScorer] Failed to compute instability: {e}")
             return 0.5  # Conservative: assume moderate instability
 
     def _compute_data_sufficiency(self, db) -> float:
@@ -245,7 +248,7 @@ class InterventionRiskScorer:
             return 0.2  # Default: low data sufficiency
 
         except Exception as e:
-            print(f"⚠️  [RiskScorer] Failed to compute data sufficiency: {e}")
+            logger.info(f"⚠️  [RiskScorer] Failed to compute data sufficiency: {e}")
             return 0.3  # Conservative: assume low sufficiency
 
     def _compute_alert_density(self, db, triggered_alerts: list) -> float:
@@ -289,7 +292,7 @@ class InterventionRiskScorer:
             return 0.0  # No alerts
 
         except Exception as e:
-            print(f"⚠️  [RiskScorer] Failed to compute alert density: {e}")
+            logger.info(f"⚠️  [RiskScorer] Failed to compute alert density: {e}")
             return 0.3  # Conservative: assume some alerts
 
     def _compute_arousal_exposure(self, db, intervention: InterventionCandidate) -> float:
@@ -328,7 +331,7 @@ class InterventionRiskScorer:
             return base_exposure
 
         except Exception as e:
-            print(f"⚠️  [RiskScorer] Failed to compute arousal exposure: {e}")
+            logger.info(f"⚠️  [RiskScorer] Failed to compute arousal exposure: {e}")
             return 0.3  # Conservative
 
     def _compute_scope_blast_radius(self, intervention: InterventionCandidate) -> float:

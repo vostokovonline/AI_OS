@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 Production Wiring: Execution Feedback Loop Integration
 
@@ -119,22 +122,22 @@ class ExecutorWithFeedback:
         )
 
         # DEBUG: Log the result
-        print(f"   🔍 Pre-commit check result:")
-        print(f"      - observer_triggered: {result.observer_triggered}")
-        print(f"      - violations: {len(result.violation_reports)}")
-        print(f"      - feedback: {result.feedback.value}")
-        print(f"      - feedback_reason: {result.feedback_reason}")
+        logger.info(f"   🔍 Pre-commit check result:")
+        logger.info(f"      - observer_triggered: {result.observer_triggered}")
+        logger.info(f"      - violations: {len(result.violation_reports)}")
+        logger.info(f"      - feedback: {result.feedback.value}")
+        logger.info(f"      - feedback_reason: {result.feedback_reason}")
 
         # Check if must stop (e.g., I7 violation for MANUAL goal)
         if self.hook.should_stop():
-            print(f"   🛑 Pre-commit check: MUST STOP")
+            logger.info(f"   🛑 Pre-commit check: MUST STOP")
             raise ExecutionMustStopException(
                 message=f"Pre-commit check failed: cannot mark as DONE",
                 safety_level=self.hook.last_feedback,
                 integration_result=result
             )
 
-        print(f"   ✅ Pre-commit check: PASSED (will continue)")
+        logger.info(f"   ✅ Pre-commit check: PASSED (will continue)")
 
         # Safe to proceed with marking as done
         return True
@@ -171,13 +174,13 @@ class ExecutorWithFeedback:
         # Log feedback
         if result.observer_triggered:
             if result.violation_reports:
-                print(f"   ⚠️  Observer detected {len(result.violation_reports)} violations after DONE")
+                logger.info(f"   ⚠️  Observer detected {len(result.violation_reports)} violations after DONE")
             else:
-                print(f"   ✅ Observer check passed (no violations)")
+                logger.info(f"   ✅ Observer check passed (no violations)")
 
         if result.reflection_triggered:
-            print(f"   🤔 Reflection made {result.reflection_decisions} decisions")
-            print(f"   📊 Feedback: {result.feedback.value} - {result.feedback_reason}")
+            logger.info(f"   🤔 Reflection made {result.reflection_decisions} decisions")
+            logger.info(f"   📊 Feedback: {result.feedback.value} - {result.feedback_reason}")
 
         return result
 
@@ -207,8 +210,8 @@ class ExecutorWithFeedback:
             error_message=error_message
         )
 
-        print(f"   🔴 Goal failed - Observer triggered: {result.observer_triggered}")
-        print(f"   📊 Feedback: {result.feedback.value} - {result.feedback_reason}")
+        logger.info(f"   🔴 Goal failed - Observer triggered: {result.observer_triggered}")
+        logger.info(f"   📊 Feedback: {result.feedback.value} - {result.feedback_reason}")
 
         return result
 

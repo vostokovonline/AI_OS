@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 GOAL TRANSITION SERVICE v3.0 - Pure Application Operation
 ====================================================
@@ -81,11 +84,11 @@ class GoalTransitionService:
         goal_state = self._state_enum(new_state)
         
         # Логируем начало
-        print(f"\n🔄 GOAL TRANSITION: {goal_id}")
-        print(f"   → State: {new_state}")
-        print(f"   → Actor: {actor}")
-        print(f"   → Reason: {reason}")
-        print("=" * 70)
+        logger.info(f"\n🔄 GOAL TRANSITION: {goal_id}")
+        logger.info(f"   → State: {new_state}")
+        logger.info(f"   → Actor: {actor}")
+        logger.info(f"   → Reason: {reason}")
+        logger.info("=" * 70)
         
         try:
             # 1. Загружаем цель с pessimistic lock
@@ -110,8 +113,8 @@ class GoalTransitionService:
                 actor=actor
             )
             
-            print(f"  ✅ Transition: SUCCESS ({from_state} → {new_state})")
-            print(f"{'='*70}\n")
+            logger.info(f"  ✅ Transition: SUCCESS ({from_state} → {new_state})")
+            logger.info(f"{'='*70}\n")
             
             return {
                 "result": TransitionResult.SUCCESS.value,
@@ -128,8 +131,8 @@ class GoalTransitionService:
             
         except ValueError as e:
             # Бизнес-правило нарушено
-            print(f"  ❌ Transition BLOCKED: {e}")
-            print(f"{'='*70}\n")
+            logger.info(f"  ❌ Transition BLOCKED: {e}")
+            logger.info(f"{'='*70}\n")
             
             await self._logger.log_violation(
                 session=uow.session,
@@ -147,8 +150,8 @@ class GoalTransitionService:
         
         except Exception as e:
             # Непредвиденная ошибка
-            print(f"  ❌ Transition FAILED: {e}")
-            print(f"{'='*70}\n")
+            logger.info(f"  ❌ Transition FAILED: {e}")
+            logger.info(f"{'='*70}\n")
             raise
 
 

@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 import os, operator, json, re
 from typing import Annotated, List, TypedDict
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -92,7 +95,7 @@ async def supervisor_node(state):
     # Предохранитель от бесконечного цикла
     msg_count = len(state["messages"])
     if msg_count > 25:
-        print(f"🛑 SAFETY BREAK: {msg_count} messages. Force FINISH.")
+        logger.info(f"🛑 SAFETY BREAK: {msg_count} messages. Force FINISH.")
         return {"next_agent": "FINISH"}
 
     # Проверяем, не зациклились ли мы (повторяющиеся сообщения)
@@ -100,7 +103,7 @@ async def supervisor_node(state):
         last_5 = [m.content if isinstance(m.content, str) else str(m.content)[:100]
                   for m in state["messages"][-5:]]
         if len(set(last_5)) < 3:  # Если последние 5 сообщений почти одинаковые
-            print(f"🛑 LOOP DETECTED: Messages repeating. Force FINISH.")
+            logger.info(f"🛑 LOOP DETECTED: Messages repeating. Force FINISH.")
             return {"next_agent": "FINISH"}
 
     # Используем обычный invoke (без structured output), чтобы получить "мысли" модели
@@ -134,14 +137,14 @@ async def supervisor_node(state):
         emotional_hints = format_emotional_context(emotional_context)
 
         if emotional_hints:
-            print(f"💭 EMOTIONAL CONTEXT: {emotional_context}")
+            logger.info(f"💭 EMOTIONAL CONTEXT: {emotional_context}")
 
     except Exception as e:
         # If emotional layer fails, continue without it (graceful degradation)
-        print(f"⚠️  Emotional layer error (continuing without): {e}")
+        logger.info(f"⚠️  Emotional layer error (continuing without): {e}")
         emotional_hints = ""
 
-    print(f"🧠 DEEPSEEK THINKING ON: {last_content[:60]}...")
+    logger.info(f"🧠 DEEPSEEK THINKING ON: {last_content[:60]}...")
 
     # Strict JSON Instruction
     instruction = (
@@ -185,14 +188,14 @@ async def supervisor_node(state):
              nxt = "PM" # Если галлюцинирует, зовем менеджера
              
     except Exception as e:
-        print(f"❌ SUPERVISOR ERROR: {e}")
+        logger.info(f"❌ SUPERVISOR ERROR: {e}")
         nxt = "PM" 
         
-    print(f"🧠 DEEPSEEK DECIDED: {nxt}")
+    logger.info(f"🧠 DEEPSEEK DECIDED: {nxt}")
     return {"next_agent": nxt}
 
 async def worker_node(state, role, default_prompt):
-    print(f"👷 WORKER {role} (Groq) STARTED...") 
+    logger.info(f"👷 WORKER {role} (Groq) STARTED...") 
     tools = AGENT_TOOLS + mcp_manager.tools
     llm = get_model(role).bind_tools(tools)
     sys = await get_prompt(role) or default_prompt
@@ -203,10 +206,10 @@ async def worker_node(state, role, default_prompt):
     res = await llm.ainvoke([SystemMessage(content=sys+usr+force)] + state["messages"])
 
     if res.tool_calls:
-        print(f"🛠️ TOOL CALLING: {res.tool_calls}")
+        logger.info(f"🛠️ TOOL CALLING: {res.tool_calls}")
         return {"messages": [res], "next_agent": "Tools"}
 
-    print(f"✅ WORKER {role} FINISHED.")
+    logger.info(f"✅ WORKER {role} FINISHED.")
     return {"messages": [res], "next_agent": "Evaluator"}
 
 # Node Wrappers
@@ -230,7 +233,7 @@ async def dynamic_tool_node(state):
     return await runnable.ainvoke(state)
 
 async def post_tool_node(state):
-    print("✅ TOOL EXECUTION DONE.")
+    logger.info("✅ TOOL EXECUTION DONE.")
     return {"next_agent": "Evaluator"}
 
 async def human_node(state): return {}

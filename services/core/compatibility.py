@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 COMPATIBILITY LAYER v1.0
 =======================
@@ -123,10 +126,10 @@ class GoalView:
         if old_status == "done":
             if goal_type in ["continuous", "directional"]:
                 # This is OLD MODEL MISUSE!
-                print(f"⚠️ MIGRATION WARNING: {goal_type} goal marked as 'done'")
-                print(f"   Goal: {self._goal.title}")
-                print(f"   Should use: lifecycle_state='ongoing' or 'permanent'")
-                print(f"   Auto-correcting to appropriate state...")
+                logger.info(f"⚠️ MIGRATION WARNING: {goal_type} goal marked as 'done'")
+                logger.info(f"   Goal: {self._goal.title}")
+                logger.info(f"   Should use: lifecycle_state='ongoing' or 'permanent'")
+                logger.info(f"   Auto-correcting to appropriate state...")
 
                 # Auto-correct
                 if goal_type == "continuous":
@@ -469,7 +472,7 @@ async def scan_database_for_migration_issues(db_session) -> Dict:
 
 if __name__ == "__main__":
     # Test compatibility layer
-    print("=== COMPATIBILITY LAYER TEST ===")
+    logger.info("=== COMPATIBILITY LAYER TEST ===")
 
     # Mock goal for testing
     class MockGoal:
@@ -485,14 +488,14 @@ if __name__ == "__main__":
     goal = MockGoal()
     view = wrap_goal(goal)
 
-    print(f"Lifecycle state: {view.lifecycle_state}")
-    print(f"Completion policy: {view.completion_policy}")
-    print(f"Can mark completed: {view.can_mark_completed()}")
+    logger.info(f"Lifecycle state: {view.lifecycle_state}")
+    logger.info(f"Completion policy: {view.completion_policy}")
+    logger.info(f"Can mark completed: {view.can_mark_completed()}")
 
     migration_info = detect_migration_needed(goal)
     if migration_info:
-        print(f"\n⚠️ MIGRATION NEEDED:")
+        logger.info(f"\n⚠️ MIGRATION NEEDED:")
         for issue in migration_info["issues"]:
-            print(f"  - {issue}")
+            logger.info(f"  - {issue}")
         for rec in migration_info["recommendations"]:
-            print(f"  → {rec}")
+            logger.info(f"  → {rec}")

@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 #!/usr/bin/env python3
 """
 Периодическое обслуживание системы
@@ -17,39 +20,39 @@ async def maintenance_loop():
     async with aiohttp.ClientSession() as session:
         while True:
             try:
-                print(f"[{datetime.utcnow().isoformat()}] Running maintenance...")
+                logger.info(f"[{datetime.utcnow().isoformat()}] Running maintenance...")
 
                 # Обновляем застаревшие цели
                 async with session.post(f"{CORE_URL}/goals/auto-update-stale") as resp:
                     if resp.status == 200:
                         result = await resp.json()
-                        print(f"  ✅ Auto-updated {result.get('updated', 0)} stale goals")
+                        logger.info(f"  ✅ Auto-updated {result.get('updated', 0)} stale goals")
                     else:
-                        print(f"  ⚠️  Failed to update stale goals: {resp.status}")
+                        logger.info(f"  ⚠️  Failed to update stale goals: {resp.status}")
 
                 # Проверяем застрявшие цели
                 async with session.post(f"{CORE_URL}/goals/resume-all-stuck") as resp:
                     if resp.status == 200:
                         result = await resp.json()
                         if result.get('resumed', 0) > 0:
-                            print(f"  ✅ Resumed {result.get('resumed', 0)} stuck goals")
+                            logger.info(f"  ✅ Resumed {result.get('resumed', 0)} stuck goals")
                         else:
-                            print(f"  ✅ No stuck goals found")
+                            logger.info(f"  ✅ No stuck goals found")
                     else:
-                        print(f"  ⚠️  Failed to resume stuck goals: {resp.status}")
+                        logger.info(f"  ⚠️  Failed to resume stuck goals: {resp.status}")
 
-                print(f"[{datetime.utcnow().isoformat()}] Maintenance complete")
+                logger.info(f"[{datetime.utcnow().isoformat()}] Maintenance complete")
 
                 # Запуск каждые 30 минут
                 await asyncio.sleep(1800)
 
             except Exception as e:
-                print(f"❌ Maintenance error: {e}")
+                logger.info(f"❌ Maintenance error: {e}")
                 await asyncio.sleep(300)  # Retry after 5 minutes on error
 
 
 if __name__ == "__main__":
-    print("🔧 AI-OS Maintenance Service")
-    print(f"Core URL: {CORE_URL}")
-    print("Starting maintenance loop...")
+    logger.info("🔧 AI-OS Maintenance Service")
+    logger.info(f"Core URL: {CORE_URL}")
+    logger.info("Starting maintenance loop...")
     asyncio.run(maintenance_loop())

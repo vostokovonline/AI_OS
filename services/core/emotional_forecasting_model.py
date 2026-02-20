@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 LEARNED EMOTIONAL FORECASTING MODEL
 ML-based prediction с rule-based safety net.
@@ -31,7 +34,7 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
-    print("⚠️  scikit-learn not available, ML model will be disabled")
+    logger.info("⚠️  scikit-learn not available, ML model will be disabled")
 
 
 # =============================================================================
@@ -163,10 +166,10 @@ class EmotionalForecastingModel:
                     self.scaler = pickle.load(f)
                 with open(self.METADATA_PATH, "rb") as f:
                     self.metadata = pickle.load(f)
-                print(f"✅ Loaded ML model (trained on {self.metadata['training_samples']} samples)")
+                logger.info(f"✅ Loaded ML model (trained on {self.metadata['training_samples']} samples)")
                 return True
         except Exception as e:
-            print(f"⚠️  Could not load ML model: {e}")
+            logger.info(f"⚠️  Could not load ML model: {e}")
         return False
 
     def save(self):
@@ -178,9 +181,9 @@ class EmotionalForecastingModel:
                 pickle.dump(self.scaler, f)
             with open(self.METADATA_PATH, "wb") as f:
                 pickle.dump(self.metadata, f)
-            print(f"✅ Saved ML model to {self.MODEL_PATH}")
+            logger.info(f"✅ Saved ML model to {self.MODEL_PATH}")
         except Exception as e:
-            print(f"⚠️  Could not save ML model: {e}")
+            logger.info(f"⚠️  Could not save ML model: {e}")
 
     async def train(
         self,
@@ -200,7 +203,7 @@ class EmotionalForecastingModel:
         if not SKLEARN_AVAILABLE:
             raise RuntimeError("scikit-learn not available")
 
-        print("📚 Starting ML model training...")
+        logger.info("📚 Starting ML model training...")
 
         # 1. Extract training data from Affective Memory
         X, y = await self._prepare_training_data()
@@ -211,7 +214,7 @@ class EmotionalForecastingModel:
                 f"(minimum {min_samples} required)"
             )
 
-        print(f"📊 Extracted {len(X)} training samples")
+        logger.info(f"📊 Extracted {len(X)} training samples")
 
         # 2. Split data
         X_train, X_test, y_train, y_test = train_test_split(
@@ -233,7 +236,7 @@ class EmotionalForecastingModel:
         )
 
         self.model.fit(X_train_scaled, y_train)
-        print("✅ Model training complete")
+        logger.info("✅ Model training complete")
 
         # 5. Evaluate
         y_pred_train = self.model.predict(X_train_scaled)
@@ -251,7 +254,7 @@ class EmotionalForecastingModel:
             "training_samples": len(X),
             "test_samples": len(X_test)
         }
-        print(f"📈 Metrics: MSE={metrics['mse']:.4f}, R2={metrics['r2']:.4f}")
+        logger.info(f"📈 Metrics: MSE={metrics['mse']:.4f}, R2={metrics['r2']:.4f}")
 
         # 🆕 QUALITY GATES: Check if model is good enough
         from ml_guardrails import training_quality_gates
@@ -263,7 +266,7 @@ class EmotionalForecastingModel:
         report = training_quality_gates.format_quality_report(
             metrics, len(X), passed, reasons
         )
-        print(report)
+        logger.info(report)
 
         if not passed:
             # Model failed quality gates → don't mark as available
@@ -313,7 +316,7 @@ class EmotionalForecastingModel:
             result = await db.execute(stmt)
             entries = result.scalars().all()
 
-            print(f"📊 Found {len(entries)} affective memory entries")
+            logger.info(f"📊 Found {len(entries)} affective memory entries")
 
             for entry in entries:
                 # Extract features (simplified - no pattern context for historical data)
@@ -342,7 +345,7 @@ class EmotionalForecastingModel:
                     X_list.append(features)
                     y_list.append(target)
                 except Exception as e:
-                    print(f"⚠️  Skipping entry: {e}")
+                    logger.info(f"⚠️  Skipping entry: {e}")
                     continue
 
         if not X_list:
@@ -424,7 +427,7 @@ class EmotionalForecastingModel:
 
         if drift_detected:
             # Drift detected → don't use ML
-            print("⚠️  [ML Model] Drift detected, disabling ML for this prediction")
+            logger.info("⚠️  [ML Model] Drift detected, disabling ML for this prediction")
             raise RuntimeError(
                 f"Drift detected in features: {drift_details}. "
                 "ML model disabled for safety."
@@ -454,7 +457,7 @@ class EmotionalForecastingModel:
 
         # Check if ML is confident enough for this action
         if confidence < action_threshold:
-            print(
+            logger.info(
                 f"⚠️  [ML Model] Low confidence ({confidence:.2f}) "
                 f"for action '{action_type}' (threshold={action_threshold:.2f})"
             )

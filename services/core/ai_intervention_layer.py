@@ -1,3 +1,6 @@
+from logging_config import get_logger
+logger = get_logger(__name__)
+
 """
 AI INTERVENTION LAYER v1.0
 ==========================
@@ -570,24 +573,24 @@ if __name__ == "__main__":
     import asyncio
 
     async def test():
-        print("Testing AI Intervention Layer...\n")
+        logger.info("Testing AI Intervention Layer...\n")
 
         # Scan for interventions
         interventions = await ai_intervention_layer.scan_for_interventions()
 
-        print(f"Interventions Required: {interventions['interventions_required']}")
-        print("\nBy Priority:")
+        logger.info(f"Interventions Required: {interventions['interventions_required']}")
+        logger.info("\nBy Priority:")
         for priority, count in interventions['by_priority'].items():
-            print(f"  {priority}: {count}")
+            logger.info(f"  {priority}: {count}")
 
-        print("\nBy Type:")
+        logger.info("\nBy Type:")
         for itype, count in interventions['by_type'].items():
-            print(f"  {itype}: {count}")
+            logger.info(f"  {itype}: {count}")
 
-        print("\nTop 5 Interventions:")
+        logger.info("\nTop 5 Interventions:")
         for intervention in interventions['interventions'][:5]:
-            print(f"\n  [{intervention['priority'].upper()}] {intervention['goal_title']}")
-            print(f"  Reason: {intervention['reason']}")
-            print(f"  Suggestion: {intervention['suggestion']}")
+            logger.info(f"\n  [{intervention['priority'].upper()}] {intervention['goal_title']}")
+            logger.info(f"  Reason: {intervention['reason']}")
+            logger.info(f"  Suggestion: {intervention['suggestion']}")
 
     asyncio.run(test())
