@@ -19,6 +19,11 @@ from database import AsyncSessionLocal
 from models import Goal
 from goal_decomposer import goal_decomposer
 
+# Centralized logging
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class AutoDecomposer:
     """
@@ -87,14 +92,14 @@ class AutoDecomposer:
                         continue
 
                     # Decompose
-                    print(f"\n🔧 AUTO-DECOMPOSING: {goal.title}")
-                    print(f"   ID: {goal.id}")
-                    print(f"   Depth: L{goal.depth_level}")
-                    print(f"   Type: {goal.goal_type}")
+                    logger.info("auto_decomposing_goal", goal_title=goal.title)
+                    logger.debug("goal_id", goal_id=str(goal.id))
+                    logger.debug("goal_depth", depth=goal.depth_level)
+                    logger.debug("goal_type", goal_type=goal.goal_type)
                     import datetime as dt
                     now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
                     created = goal.created_at.replace(tzinfo=None) if goal.created_at.tzinfo else goal.created_at
-                    print(f"   Age: {(now - created).total_seconds() / 3600:.1f} hours")
+                    logger.debug("goal_age_hours", age=f"{(now - created).total_seconds() / 3600:.1f}")
 
                     subgoals = await goal_decomposer.decompose_goal(
                         goal_id=str(goal.id),
@@ -109,7 +114,7 @@ class AutoDecomposer:
                             "action": "decomposed",
                             "children_created": len(subgoals)
                         })
-                        print(f"   ✅ Created {len(subgoals)} subgoals")
+                        logger.info("subgoals_created", count=len(subgoals))
                     else:
                         # Decompose вернул [] - возможно цель теперь atomic
                         await db.refresh(goal)
@@ -122,7 +127,7 @@ class AutoDecomposer:
                                 "action": "skipped",
                                 "reason": "marked as atomic by decomposer"
                             })
-                            print(f"   ℹ️  Marked as atomic (depth limit or other reason)")
+                            logger.info("marked_as_atomic")
                         else:
                             report["failed"] += 1
                             report["details"].append({
@@ -131,7 +136,7 @@ class AutoDecomposer:
                                 "action": "failed",
                                 "reason": "decompose returned [] but not atomic"
                             })
-                            print(f"   ❌ Failed: decompose returned []")
+                            logger.warning("decompose_failed_empty_result")
 
                 except Exception as e:
                     report["failed"] += 1
@@ -141,7 +146,7 @@ class AutoDecomposer:
                         "action": "error",
                         "error": str(e)
                     })
-                    print(f"   ❌ ERROR: {e}")
+                    logger.error("decompose_error", error=str(e))
 
             return report
 
@@ -169,17 +174,16 @@ class AutoDecomposer:
                 "failed": 0
             }
 
-            print(f"\n{'='*70}")
-            print(f"EMERGENCY DECOMPOSITION: {len(pending_goals)} pending non-atomic goals")
-            print(f"{'='*70}")
+            logger.info("emergency_decomposition_start")
+            logger.warning("emergency_decomposition", count=len(pending_goals))
 
             import datetime as dt
             now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
             for i, goal in enumerate(pending_goals, 1):
-                print(f"\n[{i}/{len(pending_goals)}] {goal.title}")
+                logger.info("emergency_decomposing", index=i, total=len(pending_goals), title=goal.title)
                 created = goal.created_at.replace(tzinfo=None) if goal.created_at.tzinfo else goal.created_at
-                print(f"   Age: {(now - created).total_seconds() / 86400:.1f} days")
+                logger.debug("goal_age_days", age=f"{(now - created).total_seconds() / 86400:.1f}")
 
                 try:
                     subgoals = await goal_decomposer.decompose_goal(
@@ -189,19 +193,19 @@ class AutoDecomposer:
 
                     if subgoals:
                         report["decomposed"] += 1
-                        print(f"   ✅ Created {len(subgoals)} subgoals")
+                        logger.info("subgoals_created", count=len(subgoals))
                     else:
                         await db.refresh(goal)
                         if goal.is_atomic:
                             report["skipped"] += 1
-                            print(f"   ⏭️  Skipped (marked atomic)")
+                            logger.debug("skipped_marked_atomic")
                         else:
                             report["failed"] += 1
-                            print(f"   ❌ Failed")
+                            logger.warning("decompose_failed_no_subgoals")
 
                 except Exception as e:
                     report["failed"] += 1
-                    print(f"   ❌ ERROR: {e}")
+                    logger.error("decompose_error", error=str(e))
 
             return report
 
@@ -240,7 +244,7 @@ if __name__ == "__main__":
         # Test 1: Scan for stuck goals
         report = await auto_decomposer.scan_and_decompose_stuck_goals()
 
-        print(f"\n{'='*70}")
+        logger.info("emergency_decomposition_start")
         print(f"AUTO-DECOMPOSE REPORT")
         print(f"{'='*70}")
         print(f"Scanned: {report['scanned']}")
