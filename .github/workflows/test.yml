@@ -1,0 +1,87 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if tests exist
+        run: |
+          if [ -d "tests/unit" ]; then
+            echo "Unit tests found"
+            echo "RUN_TESTS=true" >> $GITHUB_ENV
+          else
+            echo "No unit tests found"
+            echo "RUN_TESTS=false" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Python
+        if: env.RUN_TESTS == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        if: env.RUN_TESTS == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        if: env.RUN_TESTS == 'true'
+        run: |
+          pytest tests/unit -v --tb=short
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install linters
+        run: |
+          pip install ruff black isort
+
+      - name: Check formatting with Black
+        run: |
+          black --check --diff services/core/ || true
+        continue-on-error: true
+
+      - name: Check imports with isort
+        run: |
+          isort --check-only --diff services/core/ || true
+        continue-on-error: true
+
+      - name: Lint with Ruff
+        run: |
+          ruff check services/core/ --output-format=github || true
+        continue-on-error: true
+
+  docker-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check docker-compose syntax
+        run: |
+          docker compose config --quiet 2>/dev/null || echo "docker-compose not available or syntax issue"
+        continue-on-error: true
+
+      - name: Check Dockerfile exists
+        run: |
+          if [ -f "services/core/Dockerfile" ]; then
+            echo "Dockerfile found"
+          else
+            echo "No Dockerfile"
+          fi

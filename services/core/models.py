@@ -137,6 +137,10 @@ class Goal(Base):
     forecast_id = Column(UUID(as_uuid=True), ForeignKey("emotional_forecasts.id"), nullable=True)
     # Links goal to the emotional forecast made before execution
 
+    # STEP 3.1: Strategy Binding - Goal belongs to a strategy
+    strategy_id = Column(UUID(as_uuid=True), ForeignKey("strategies.id"), nullable=True, index=True)
+    # Links goal to the strategy it belongs to. NULL = no strategy (manual or ad-hoc goal)
+
     # Relationships
     children = relationship("Goal", backref=backref('parent', remote_side=[id]))
     # Additional relations will be loaded via GoalRelation model
@@ -301,6 +305,11 @@ class Artifact(Base):
     # Verification (CODE-BASED, not LLM)
     verification_status = Column(String, default="pending", index=True)  # pending | passed | failed
     verification_results = Column(JSON, nullable=True)  # [{"name": "...", "passed": true, "details": "..."}]
+
+    # Autonomy v2 - State Mutations (Phase 1)
+    # Artifact can propose state changes to the system
+    state_mutations = Column(JSON, nullable=True)  # [{"entity_name": "...", "mutation_type": "update", "new_value": {...}}]
+    decision_signals = Column(JSON, nullable=True)  # [{"signal_type": "positive", "strength": 0.7}]
 
     # Reusability
     reusable = Column(Boolean, default=True)

@@ -91,6 +91,109 @@ except Exception as e:
 
 ---
 
+## Stabilization Sprint (COMPLETED - 2026-02-20)
+
+**Goal**: Fix critical bugs + implement test shield for production readiness.
+
+### Bug Fixes (5 Critical Issues)
+
+| # | Problem | File | Symptom | Fix |
+|---|---------|------|---------|-----|
+| 1 | `get_status()` without `await` | main.py:1554 | `/llm/status` → 500 | Added `await` |
+| 2 | LiteLLM no healthcheck | docker-compose.yml | Silent failures | Added healthcheck + master_key |
+| 3 | Neo4j no healthcheck | docker-compose.yml | Silent failures | Added healthcheck |
+| 4 | `logger not defined` | emotional_layer.py | Import error | Added `from logging_config import get_logger` |
+| 5 | 67% artifacts failed | artifact_verifier.py | False negatives | Added inline content detection |
+
+### Test Shield (45 Tests)
+
+```
+tests/
+├── conftest.py                    # Fixtures and config
+├── README.md                      # Test documentation
+├── unit/
+│   ├── test_imports.py           # 18 smoke tests (module imports)
+│   ├── test_goal_state_machine.py # 10 tests (status protection)
+│   └── test_artifact_verifier.py  # 16 tests (inline vs file)
+└── e2e/
+    └── test_api.py                # 8 tests (API connectivity)
+```
+
+**Results**: `45 passed, 3 skipped`
+
+| Category | Tests | What it catches |
+|----------|-------|-----------------|
+| Smoke imports | 18 | `logger not defined`, syntax errors |
+| State machine | 10 | Direct status assignment bypass |
+| Artifact verifier | 16 | False failed artifacts |
+| E2E API | 8 | Services unavailable |
+
+**Running tests:**
+```bash
+make test-unit    # Unit tests (~2s)
+make test-e2e     # E2E tests (~1s) - requires running services
+make test-all     # All tests
+```
+
+### CI/CD Infrastructure
+
+```
+.github/workflows/
+├── test.yml     # Unit tests + lint on push/PR
+└── deploy.yml   # Deploy info on main push
+```
+
+**test.yml runs:**
+- Unit tests with pytest
+- Linting with ruff, black, isort
+- Docker compose syntax check
+
+### Code Quality Tools
+
+```bash
+# Configuration files
+pyproject.toml          # ruff, black, isort, pytest, coverage config
+.pre-commit-config.yaml # Pre-push test hook
+requirements-test.txt   # pytest, pytest-asyncio, httpx, pytest-cov
+pytest.ini              # pytest configuration
+```
+
+**Pre-commit hooks:**
+- black (formatting)
+- isort (import sorting)
+- ruff (linting)
+- pytest-unit (runs on pre-push)
+
+### Metrics (Before → After)
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Artifacts passed | 285 | 411 (+44%) |
+| LLM status endpoint | 500 Error | 200 OK |
+| Unit tests | 0 | 45 |
+| CI/CD | None | GitHub Actions |
+| Healthchecks | 0 services | 2 services (LiteLLM, Neo4j) |
+
+### Key Lessons Learned
+
+1. **Async/await errors are silent killers** - `get_status()` returned coroutine, not result
+2. **Healthchecks are not optional** - 12 services without healthchecks = bomb
+3. **Test imports first** - `logger not defined` caught by smoke test in 0.1s
+4. **Artifact verification matters** - 67% false negatives = broken execution loop
+5. **Inline vs file detection** - Content like `{"key": "value"}` is NOT a file path
+
+### New Makefile Commands
+
+```bash
+make test-unit    # Run unit tests
+make test-e2e     # Run E2E tests (requires running services)
+make test-all     # Run all tests
+make llm-status   # Check LLM fallback status
+make llm-reset    # Reset Groq cooldown
+```
+
+---
+
 ## Transaction Boundary Refactoring (COMPLETED)
 
 **Core architectural change**: Extracting transaction management into UnitOfWork pattern.
@@ -218,6 +321,127 @@ curl -X POST http://localhost:8000/goals/bulk-transition \
   -d '{"goal_ids": ["uuid1", "uuid2"], "new_state": "active"}'
 ```
 
+
+---
+
+## Memory System Architecture (v3.1)
+
+**Overview**: Multi-layer memory system with 6 different types of storage.
+
+### Memory Types
+
+| Type | Storage | TTL | Purpose |
+|------|---------|-----|---------|
+| **SemanticMemory** | PostgreSQL + Milvus | Yes (cleanup) | Decision patterns |
+| **MemorySignal** | Redis | Yes (auto) | Runtime pressure |
+| **ContextualMemory** | PostgreSQL | No | User context |
+| **AffectiveMemory** | PostgreSQL | No | Emotional outcomes |
+| **Vector (Milvus)** | Milvus | No | Semantic search |
+| **Graph (Neo4j)** | Neo4j | No | Entity relationships |
+
+### Key Components
+
+**1. SemanticMemory** (`semantic_memory.py`)
+```python
+from semantic_memory import semantic_memory
+
+# Store pattern
+pattern_id = await semantic_memory.store_pattern(
+    pattern_type="success_pattern",
+    content={"goal_type": "achievable", "domains": ["programming"]},
+    source_goal_id=goal_id,
+    confidence=0.8
+)
+
+# Retrieve recommendations
+recommendations = await semantic_memory.get_recommendations(goal)
+
+# Vector search (Milvus)
+patterns = await semantic_memory.retrieve_similar_patterns_vector("success", limit=5)
+
+# Cleanup old patterns
+deleted = await semantic_memory.cleanup_old_patterns(days=30)
+```
+
+**2. MemorySignal** (`memory_signal.py`)
+```python
+from memory_signal import MemorySignal, persistent_memory_registry
+
+# Create signal
+signal = MemorySignal(
+    type="recent_failure",
+    target="skill:web_research",
+    intensity=0.8,
+    ttl=5  # 5 hours
+)
+
+# Store in Redis (persists across restarts)
+persistent_memory_registry.add(signal)
+
+# Get active signals
+active = persistent_memory_registry.get_active()
+```
+
+**3. EmotionalFeedbackLoop** (`emotional_feedback_loop.py`)
+```python
+from emotional_feedback_loop import emotional_feedback_loop
+
+# Record goal completion (auto-called by GoalStrictEvaluator)
+await emotional_feedback_loop.record_goal_completion(
+    goal_id=str(goal.id),
+    user_id="user_123",
+    outcome="success",
+    metrics={"score": 0.95, "duration": 120}
+)
+```
+
+### Scheduled Tasks
+
+| Task | Schedule | File |
+|------|----------|------|
+| Pattern cleanup | Daily at 4:00 AM | `scheduler.py` |
+| Signal decay | Hourly | `scheduler.py` |
+| Invariants check | Daily at 3:00 AM | `scheduler.py` |
+
+### API Endpoints
+
+```bash
+# Get memory stats
+GET /memory/stats
+
+# Health check
+GET /memory/health
+
+# Cleanup patterns
+POST /patterns/cleanup?days=30
+
+# Vector search
+POST /patterns/search-vector?query=success&limit=5
+
+# Batch store
+POST /memory/batch-store
+```
+
+### Usage Pattern
+
+```python
+# In goal completion flow:
+# 1. GoalStrictEvaluator calls _record_completion()
+# 2. _record_completion() calls emotional_feedback_loop.record_goal_completion()
+# 3. EmotionalFeedbackLoop stores to AffectiveMemory
+# 4. Pattern extracted and stored to SemanticMemory + Milvus + Neo4j
+# 5. Future decisions influenced by MemorySignal (Redis)
+```
+
+### Deduplication
+
+Patterns are deduplicated before storage:
+```python
+# _find_similar_pattern() checks:
+# 1. Vector similarity in Milvus
+# 2. Jaccard similarity on key fields
+# If similar pattern exists → update confidence instead of creating duplicate
+```
 
 ---
 
@@ -1075,7 +1299,32 @@ MINIO_ROOT_PASSWORD=your_password
 
 ## Testing
 
-### System Tests
+### Automated Tests (pytest)
+
+**Structure:**
+```
+tests/
+├── conftest.py                    # Fixtures and config
+├── unit/
+│   ├── test_imports.py           # 18 smoke tests
+│   ├── test_goal_state_machine.py # 10 state machine tests
+│   └── test_artifact_verifier.py  # 16 verifier tests
+└── e2e/
+    └── test_api.py                # 8 API tests
+```
+
+**Running tests:**
+```bash
+make test-unit    # Unit tests (~2s) - no dependencies
+make test-e2e     # E2E tests (~1s) - requires running services
+make test-all     # All tests
+
+# Or directly in container:
+docker exec ns_core pytest /app/tests/unit -v
+docker exec ns_core pytest /app/tests/e2e -v -m e2e
+```
+
+### Legacy System Tests
 - `services/core/test_system.py` - General system tests
 - `services/core/skills/browser/test_basics.py` - Browser skill tests
 

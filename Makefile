@@ -1,4 +1,4 @@
-.PHONY: help deploy deploy-fast deploy-single status logs restart test-goal
+.PHONY: help deploy deploy-fast deploy-single status logs restart test-goal test-unit test-e2e test-all
 
 # AI_OS Makefile - Удобное управление проектом
 
@@ -24,6 +24,9 @@ help:
 	@echo "Tests:"
 	@echo "  make test-goal      - Create test atomic goal"
 	@echo "  make test-llm       - Test LLM fallback system"
+	@echo "  make test-unit      - Run unit tests (pytest)"
+	@echo "  make test-e2e       - Run E2E tests (pytest)"
+	@echo "  make test-all       - Run all tests"
 	@echo ""
 	@echo "Data Model Governance:"
 	@echo "  make verify-models  - Verify models.py integrity"
@@ -90,6 +93,18 @@ test-goal:
 		-H "Content-Type: application/json" \
 		-d '{"title": "Test Goal from Makefile", "description": "Testing deployment script", "goal_type": "achievable", "is_atomic": true, "depth_level": 3}' \
 		| python3 -m json.tool
+
+test-unit:
+	@echo "Running unit tests..."
+	@docker exec ns_core pytest /app/tests/unit -v --tb=short
+
+test-e2e:
+	@echo "Running E2E tests..."
+	@docker exec ns_core pytest /app/tests/e2e -v --tb=short -m e2e
+
+test-all:
+	@echo "Running all tests..."
+	@docker exec ns_core pytest /app/tests -v --tb=short
 
 # База данных
 db-shell:

@@ -213,6 +213,58 @@ async def run_nightly_invariants_check():
         logger.error("invariants_check_exception", error=str(e))
 
 
+async def cleanup_memory_patterns():
+    """
+    🧠 MEMORY: Очистка старых паттернов с low confidence
+    
+    Запускается раз в сутки для удаления устаревших паттернов.
+    """
+    from semantic_memory import semantic_memory
+
+    logger.info("memory_cleanup_started")
+
+    try:
+        # Cleanup patterns older than 30 days with low confidence
+        deleted = await semantic_memory.cleanup_old_patterns(days=30)
+        
+        logger.info("memory_cleanup_completed", deleted_count=deleted)
+        
+        return {"deleted": deleted}
+        
+    except Exception as e:
+        logger.error("memory_cleanup_error", error=str(e))
+        return {"error": str(e)}
+
+
+async def decay_memory_signals():
+    """
+    🧠 MEMORY: Decay всех MemorySignal
+    
+    Запускается каждый час для уменьшения TTL сигналов.
+    """
+    from memory_signal import memory_registry, persistent_memory_registry
+
+    logger.info("memory_signal_decay_started")
+
+    try:
+        # Decay in-memory registry
+        memory_registry.decay_all()
+        local_count = len(memory_registry.get_active())
+        
+        # Redis registry handles TTL automatically
+        redis_summary = persistent_memory_registry.summary()
+        
+        logger.info("memory_signal_decay_completed",
+                   local_signals=local_count,
+                   redis_signals=redis_summary.get("total_signals", 0))
+        
+        return {"local": local_count, "redis": redis_summary.get("total_signals", 0)}
+        
+    except Exception as e:
+        logger.error("memory_signal_decay_error", error=str(e))
+        return {"error": str(e)}
+
+
 def start_scheduler():
     # Cognitive Loop every 10 mins
     scheduler.add_job(cognitive_heartbeat, 'interval', minutes=10)
@@ -235,11 +287,30 @@ def start_scheduler():
         id='invariants_check'
     )
 
+    # 🧠 MEMORY: Pattern cleanup nightly (every 24h at 4 AM)
+    scheduler.add_job(
+        cleanup_memory_patterns,
+        'cron',
+        hour=4,
+        minute=0,
+        id='memory_cleanup'
+    )
+
+    # 🧠 MEMORY: Signal decay hourly
+    scheduler.add_job(
+        decay_memory_signals,
+        'interval',
+        hours=1,
+        id='memory_decay'
+    )
+
     scheduler.start()
     logger.info("scheduler_started",
                cognitive_heartbeat="every 10 min",
                atomic_executor="every 5 min",
                auto_resume="every 5 min",
                decomposition="every 10 min",
-               invariants_check="daily at 3:00 AM")
+               invariants_check="daily at 3:00 AM",
+               memory_cleanup="daily at 4:00 AM",
+               memory_decay="hourly")
 

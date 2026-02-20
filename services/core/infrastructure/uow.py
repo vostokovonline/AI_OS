@@ -91,8 +91,9 @@ class GoalRepository:
         return list(result.scalars().all())
     
     async def save(self, session, goal) -> None:
-        """Сохранить (add)"""
+        """Сохранить (add + flush для получения ID)"""
         session.add(goal)
+        await session.flush()  # Flush to get generated ID
     
     async def update(self, session, goal) -> None:
         """Обновить (flush всех изменений в сессии)"""
@@ -200,3 +201,199 @@ def create_uow_provider() -> "UoWProvider":
             return GoalRepository()
     
     return UoWProvider(AsyncSessionLocal)
+
+
+class BulkTransitionService:
+    """
+    Bulk Transition Service - массовые переходы в одной транзакции.
+    
+    Преимущества:
+    - O(1) транзакций вместо O(N)
+    - Atomic - все или ничего
+    - Пессимистичные блокировки для консистентности
+    """
+    
+    def __init__(self):
+        self._repository = GoalRepository()
+        self._logger = AuditLogger()
+    
+    async def execute_bulk(
+        self,
+        uow: "UnitOfWork",
+        goal_ids: list,
+        new_state: str,
+        reason: str,
+        actor: str = "system"
+    ) -> dict:
+        """
+        Выполнить массовый переход для списка целей.
+        
+        Args:
+            uow: UnitOfWork с активной транзакцией
+            goal_ids: Список UUID целей
+            new_state: Новое состояние
+            reason: Причина перехода
+            actor: Кто инициировал
+            
+        Returns:
+            {
+                "total": int,
+                "succeeded": int,
+                "failed": int,
+                "results": [...]
+            }
+        """
+        from uuid import UUID
+        from domain.goal_domain_service import GoalDomainService, GoalState
+        from datetime import datetime
+        
+        domain = GoalDomainService()
+        goal_state = GoalState(new_state)
+        
+        results = []
+        succeeded = 0
+        failed = 0
+        
+        print(f"\n🔄 BULK TRANSITION: {len(goal_ids)} goals")
+        print(f"   → State: {new_state}")
+        print(f"   → Actor: {actor}")
+        print(f"   → Reason: {reason}")
+        print("=" * 70)
+        
+        # 1. Блокируем все цели одним запросом
+        goals = await self._repository.bulk_get_for_update(uow.session, goal_ids)
+        
+        if len(goals) != len(goal_ids):
+            found_ids = {str(g.id) for g in goals}
+            missing = [str(gid) for gid in goal_ids if str(gid) not in found_ids]
+            print(f"  ⚠️ Missing goals: {missing}")
+        
+        # 2. Выполняем переходы
+        for goal in goals:
+            goal_id = str(goal.id)
+            from_state = goal._status
+            
+            try:
+                # Делегируем доменному слою
+                event = domain.transition(goal, goal_state, reason)
+                
+                # Логируем
+                await self._logger.log_transition(
+                    session=uow.session,
+                    goal_id=goal_id,
+                    goal_type=getattr(goal, 'goal_type', 'unknown'),
+                    from_state=from_state,
+                    to_state=new_state,
+                    reason=reason,
+                    actor=actor
+                )
+                
+                results.append({
+                    "goal_id": goal_id,
+                    "status": "success",
+                    "from_state": from_state,
+                    "to_state": new_state
+                })
+                succeeded += 1
+                
+            except ValueError as e:
+                # Бизнес-правило нарушено
+                results.append({
+                    "goal_id": goal_id,
+                    "status": "blocked",
+                    "from_state": from_state,
+                    "reason": str(e)
+                })
+                failed += 1
+                
+                await self._logger.log_violation(
+                    session=uow.session,
+                    goal_id=goal_id,
+                    goal_type=getattr(goal, 'goal_type', 'unknown'),
+                    reason=str(e)
+                )
+                
+            except Exception as e:
+                # Непредвиденная ошибка
+                results.append({
+                    "goal_id": goal_id,
+                    "status": "failed",
+                    "from_state": from_state,
+                    "error": str(e)
+                })
+                failed += 1
+                
+                await self._logger.log_failure(
+                    session=uow.session,
+                    goal_id=goal_id,
+                    goal_type=getattr(goal, 'goal_type', 'unknown'),
+                    from_state=from_state,
+                    to_state=new_state,
+                    error=str(e)
+                )
+        
+        print(f"  ✅ Bulk Complete: {succeeded} succeeded, {failed} failed")
+        print(f"{'='*70}\n")
+        
+        return {
+            "total": len(goal_ids),
+            "found": len(goals),
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def freeze_tree(
+        self,
+        uow: "UnitOfWork",
+        root_goal_id: str,
+        reason: str = "Tree frozen",
+        actor: str = "system"
+    ) -> dict:
+        """
+        Заморозить всё дерево целей (root + все потомки).
+        
+        Полезно для:
+        - Приостановки больших проектов
+        - Массовой архивации
+        - Cascade operations
+        
+        Args:
+            uow: UnitOfWork с активной транзакцией
+            root_goal_id: ID корневой цели
+            reason: Причина
+            actor: Кто инициировал
+            
+        Returns:
+            Результаты bulk операции
+        """
+        from uuid import UUID
+        from sqlalchemy import select, or_
+        from models import Goal
+        
+        root_uuid = UUID(root_goal_id)
+        
+        # 1. Получаем все цели в дереве (root + descendants)
+        stmt = select(Goal.id).where(
+            or_(
+                Goal.id == root_uuid,
+                Goal.parent_id == root_uuid
+            )
+        )
+        
+        result = await uow.session.execute(stmt)
+        goal_ids = [row[0] for row in result.all()]
+        
+        # 2. Выполняем bulk transition
+        return await self.execute_bulk(
+            uow=uow,
+            goal_ids=goal_ids,
+            new_state="frozen",
+            reason=reason,
+            actor=actor
+        )
+
+
+# Singleton instance
+bulk_transition_service = BulkTransitionService()

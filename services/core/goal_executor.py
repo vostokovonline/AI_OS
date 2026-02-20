@@ -185,13 +185,12 @@ class GoalExecutor:
         repo = GoalRepository()
         await repo.save(uow.session, goal)
         
-        # Transition: pending → pending (логируем создание)
-        await transition_service.transition(
-            uow=uow,
-            goal_id=goal.id,
-            new_state="pending",
-            reason="Initial goal creation",
-            actor="goal_executor"
+        # Log goal creation (no transition needed - already in pending)
+        logger.info(
+            "goal_created",
+            goal_id=str(goal.id),
+            goal_type=goal.goal_type,
+            title=goal.title
         )
 
         return goal

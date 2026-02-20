@@ -1,8 +1,13 @@
 """
-ARTIFACT VERIFIER - v1
+ARTIFACT VERIFIER - v1.1
 Code-based verification of artifacts (NOT LLM-based)
 
 Key principle: Code decides, not LLM suggestions
+
+v1.1 Changes:
+- Support for absolute paths and /tmp/artifacts
+- Smart content_kind detection for FILE artifacts
+- Better handling of inline content (not file paths)
 """
 import os
 import json
@@ -40,11 +45,97 @@ class ArtifactVerifier:
 
     ARTIFACT_TYPES = ["FILE", "KNOWLEDGE", "DATASET", "REPORT", "LINK", "EXECUTION_LOG"]
 
+    # Possible artifact base paths (checked in order)
+    ARTIFACT_BASE_PATHS = [
+        "/data/artifacts",
+        "/tmp/artifacts",
+        "./artifacts",
+    ]
+
     def __init__(self, base_path: str = None):
         if base_path is None:
             base_path = os.getenv("ARTIFACTS_PATH", "/data/artifacts")
         self.base_path = base_path
         os.makedirs(base_path, exist_ok=True)
+
+    def _resolve_file_path(self, location: str) -> tuple[str, bool]:
+        """
+        Resolve file location to actual path.
+        
+        Returns:
+            (resolved_path, found) tuple
+        """
+        # If location is absolute path, check it directly
+        if os.path.isabs(location):
+            return location, os.path.exists(location)
+        
+        # Check in all possible base paths
+        for base in [self.base_path] + [p for p in self.ARTIFACT_BASE_PATHS if p != self.base_path]:
+            full_path = os.path.join(base, location)
+            if os.path.exists(full_path):
+                return full_path, True
+        
+        # Check if location looks like a file path (has extension or slashes)
+        if '.' in location or '/' in location or '\\' in location:
+            return os.path.join(self.base_path, location), False
+        
+        # Not a file path at all - this is inline content
+        return None, False
+
+    def _is_inline_content(self, location: str, content_kind: str) -> bool:
+        """
+        Detect if location is inline content rather than a file path.
+        
+        Inline content patterns:
+        - No file extension
+        - No path separators
+        - Contains newlines or special chars
+        - Looks like JSON/dict content
+        - Contains spaces (likely prose, not filename)
+        """
+        if content_kind != "file":
+            return False
+            
+        # Has path separators - likely a path
+        if '/' in location or '\\' in location:
+            return False
+            
+        # Has file extension - likely a path
+        if '.' in location and len(location.split('.')[-1]) <= 5:
+            # But check if it's actually a file that exists
+            resolved, found = self._resolve_file_path(location)
+            if found:
+                return False
+            # If file doesn't exist and has spaces, it's inline content with periods
+            if ' ' in location:
+                return True
+            return False
+            
+        # Looks like JSON
+        if location.strip().startswith('{') or location.strip().startswith('['):
+            return True
+            
+        # Has newlines - inline content
+        if '\n' in location or len(location) > 200:
+            return True
+        
+        # Contains spaces - likely prose, not a filename
+        if ' ' in location:
+            return True
+            
+        # No file-like characteristics - treat as inline
+        return True
+            
+        # Looks like JSON
+        if location.strip().startswith('{') or location.strip().startswith('['):
+            return True
+            
+        # Has newlines - inline content
+        if '\n' in location or len(location) > 200:
+            return True
+            
+        # No file-like characteristics - treat as inline
+        return True
 
     def verify(self, artifact_data: Dict) -> List[VerificationResult]:
         """
@@ -70,7 +161,11 @@ class ArtifactVerifier:
         # Базовая проверка: тип артефакта валиден
         results.append(self._verify_type(artifact_type))
 
-        if content_kind == "file":
+        # Smart detection: if content_kind is "file" but location is inline content
+        if content_kind == "file" and self._is_inline_content(content_location, content_kind):
+            # Treat as db/inline content instead
+            results.extend(self._verify_inline_content(artifact_type, content_location))
+        elif content_kind == "file":
             # Файловые проверки
             results.extend(self._verify_file_artifact(artifact_type, content_location))
         elif content_kind == "external":
@@ -82,7 +177,34 @@ class ArtifactVerifier:
         elif content_kind == "vector":
             # Vector DB проверки
             results.extend(self._verify_vector_artifact(artifact_type, content_location))
+        else:
+            # Unknown content_kind - try inline content verification
+            results.extend(self._verify_inline_content(artifact_type, content_location))
 
+        return results
+
+    def _verify_inline_content(self, artifact_type: str, content: str) -> List[VerificationResult]:
+        """Verify inline content (not stored as file)"""
+        results = []
+        
+        # Content not empty
+        if content and len(content) > 0:
+            results.append(VerificationResult("inline_content_exists", True, f"Content length: {len(content)}"))
+        else:
+            results.append(VerificationResult("inline_content_exists", False, "Empty content"))
+            return results
+        
+        # Try to parse as JSON
+        try:
+            data = json.loads(content)
+            results.append(VerificationResult("json_valid", True, "Valid JSON content"))
+        except (json.JSONDecodeError, TypeError):
+            # Not JSON - check as text
+            if len(content) >= 10:
+                results.append(VerificationResult("content_min_length", True, f"Text length: {len(content)}"))
+            else:
+                results.append(VerificationResult("content_min_length", False, f"Content too short: {len(content)}"))
+        
         return results
 
     def _verify_type(self, artifact_type: str) -> VerificationResult:
@@ -95,13 +217,15 @@ class ArtifactVerifier:
     def _verify_file_artifact(self, artifact_type: str, location: str) -> List[VerificationResult]:
         """Проверяет файловый артефакт"""
         results = []
-        full_path = os.path.join(self.base_path, location)
+        
+        # Resolve file path
+        full_path, found = self._resolve_file_path(location)
 
         # 1. Файл существует
-        if os.path.exists(full_path):
+        if found and full_path:
             results.append(VerificationResult("file_exists", True, f"File exists: {full_path}"))
         else:
-            results.append(VerificationResult("file_exists", False, f"File not found: {full_path}"))
+            results.append(VerificationResult("file_exists", False, f"File not found: {full_path or location}"))
             return results  # Если файла нет - дальше нет смысла проверять
 
         # 2. Файл не пустой

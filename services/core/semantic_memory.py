@@ -55,10 +55,13 @@ class SemanticMemory:
         Returns:
             ID созданного паттерна
         """
-        # Для семантической памяти используем таблицу Thoughts
-        # но с категорией "pattern"
-
         from models import Thought
+
+        # 🆕 DEDUPLICATION: Check for similar existing patterns
+        existing = await self._find_similar_pattern(pattern_type, content)
+        if existing:
+            # Update confidence instead of creating duplicate
+            return await self._update_pattern_confidence(existing, confidence)
 
         async with AsyncSessionLocal() as db:
             thought = Thought(
@@ -76,6 +79,102 @@ class SemanticMemory:
             content["confidence"] = confidence
             await self.store_pattern_vector(pattern_type, content, pattern_id)
 
+            return pattern_id
+
+    async def _find_similar_pattern(
+        self,
+        pattern_type: str,
+        content: Dict,
+        similarity_threshold: float = 0.8
+    ) -> Optional[str]:
+        """
+        Ищет похожий паттерн в памяти.
+        
+        Args:
+            pattern_type: Тип паттерна
+            content: Содержимое для сравнения
+            similarity_threshold: Порог схожести (0.0-1.0)
+            
+        Returns:
+            ID похожего паттерна или None
+        """
+        from models import Thought
+        
+        # Use vector search for similarity
+        text_repr = self._pattern_to_text(pattern_type, content)
+        similar = await self.retrieve_similar_patterns_vector(text_repr, limit=3)
+        
+        for pattern in similar:
+            # Check type match
+            if pattern.get("pattern_type") != pattern_type:
+                continue
+            
+            # Check key fields similarity
+            if self._calculate_similarity(content, pattern) >= similarity_threshold:
+                return pattern.get("id")
+        
+        return None
+
+    def _calculate_similarity(self, content1: Dict, content2: Dict) -> float:
+        """
+        Вычисляет схожесть двух паттернов.
+        
+        Simple Jaccard similarity on key fields.
+        """
+        key_fields = ["goal_type", "domains", "success_factors", "mistakes"]
+        
+        matches = 0
+        total = 0
+        
+        for field in key_fields:
+            if field in content1 or field in content2:
+                total += 1
+                val1 = set(content1.get(field, []) or [])
+                val2 = set(content2.get(field, []) or [])
+                
+                if val1 and val2:
+                    intersection = len(val1 & val2)
+                    union = len(val1 | val2)
+                    matches += intersection / union if union > 0 else 0
+                elif val1 == val2:
+                    matches += 1
+        
+        return matches / total if total > 0 else 0.0
+
+    async def _update_pattern_confidence(
+        self,
+        pattern_id: str,
+        new_confidence: float
+    ) -> str:
+        """
+        Обновляет confidence существующего паттерна.
+        
+        Args:
+            pattern_id: ID паттерна
+            new_confidence: Новое значение confidence
+            
+        Returns:
+            ID паттерна
+        """
+        from models import Thought
+        
+        async with AsyncSessionLocal() as db:
+            stmt = select(Thought).where(Thought.id == uuid.UUID(pattern_id))
+            result = await db.execute(stmt)
+            thought = result.scalar_one_or_none()
+            
+            if thought:
+                # Boost confidence if new evidence supports it
+                old_confidence = thought.content.get("confidence", 0.5) if isinstance(thought.content, dict) else 0.5
+                boosted = min(1.0, (old_confidence + new_confidence) / 2 + 0.1)
+                
+                # Update status if confidence crosses threshold
+                if boosted > 0.5:
+                    thought.status = "active"
+                
+                await db.commit()
+                print(f"🔄 Updated pattern {pattern_id}: confidence {old_confidence:.2f} → {boosted:.2f}")
+            
             return pattern_id
 
     async def extract_success_pattern(self, goal_id: str, reflection: Dict) -> Dict:
@@ -530,6 +629,171 @@ class SemanticMemory:
             parts.append(f"Mistakes: {', '.join(content['mistakes'])}")
         
         return " | ".join(parts)
+
+    async def store_pattern_graph(
+        self,
+        pattern_type: str,
+        content: Dict,
+        pattern_id: str
+    ) -> bool:
+        """
+        Сохраняет связи паттерна в Neo4j.
+        
+        Создаёт узлы для:
+        - Pattern
+        - Domains
+        - Goal types
+        
+        И связи между ними.
+        
+        Args:
+            pattern_type: Тип паттерна
+            content: Содержимое паттерна
+            pattern_id: ID паттерна
+            
+        Returns:
+            True если успешно
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Create pattern node
+                await client.post(
+                    f"{MEMORY_URL}/add_fact",
+                    json={
+                        "subject": f"Pattern:{pattern_id}",
+                        "predicate": "TYPE",
+                        "object": pattern_type
+                    }
+                )
+                
+                # Create domain relationships
+                for domain in content.get("domains", []):
+                    await client.post(
+                        f"{MEMORY_URL}/add_fact",
+                        json={
+                            "subject": f"Pattern:{pattern_id}",
+                            "predicate": "RELATES_TO_DOMAIN",
+                            "object": domain
+                        }
+                    )
+                
+                # Create goal type relationship
+                if "goal_type" in content:
+                    await client.post(
+                        f"{MEMORY_URL}/add_fact",
+                        json={
+                            "subject": f"Pattern:{pattern_id}",
+                            "predicate": "APPLIES_TO_GOAL_TYPE",
+                            "object": content["goal_type"]
+                        }
+                    )
+                
+                return True
+                
+        except Exception as e:
+            print(f"⚠️ Neo4j store error: {e}")
+            return False
+
+    async def batch_store_patterns_vector(
+        self,
+        patterns: List[Dict]
+    ) -> int:
+        """
+        Batch сохранение паттернов в Milvus.
+        
+        Оптимизация: один HTTP запрос вместо N.
+        
+        Args:
+            patterns: Список паттернов
+            
+        Returns:
+            Количество успешно сохранённых
+        """
+        # Milvus doesn't support batch insert via HTTP API
+        # Use sequential for now, but in parallel
+        import asyncio
+        
+        tasks = []
+        for p in patterns:
+            task = self.store_pattern_vector(
+                p["pattern_type"],
+                p["content"],
+                p["pattern_id"]
+            )
+            tasks.append(task)
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        success_count = sum(1 for r in results if r is True)
+        return success_count
+
+    async def get_stats(self) -> Dict:
+        """
+        Возвращает статистику памяти для мониторинга.
+        
+        Returns:
+            Dict со статистикой всех типов памяти
+        """
+        stats = {
+            "postgresql": {},
+            "milvus": {},
+            "neo4j": {},
+            "redis": {}
+        }
+        
+        # PostgreSQL stats
+        try:
+            async with AsyncSessionLocal() as db:
+                # Total patterns
+                result = await db.execute(select(func.count(Thought.id)))
+                stats["postgresql"]["total_patterns"] = result.scalar() or 0
+                
+                # By status
+                result = await db.execute(
+                    select(Thought.status, func.count(Thought.id))
+                    .group_by(Thought.status)
+                )
+                stats["postgresql"]["by_status"] = {
+                    row[0]: row[1] for row in result.all()
+                }
+                
+                # By pattern type (parse from content)
+                result = await db.execute(
+                    select(Thought.content)
+                    .where(Thought.content.like("%_pattern:%"))
+                    .limit(100)
+                )
+                pattern_types = {}
+                for row in result.scalars().all():
+                    try:
+                        content = row if isinstance(row, str) else str(row)
+                        ptype = content.split(":")[0] if ":" in content else "unknown"
+                        pattern_types[ptype] = pattern_types.get(ptype, 0) + 1
+                    except:
+                        pass
+                stats["postgresql"]["by_pattern_type"] = pattern_types
+                
+        except Exception as e:
+            stats["postgresql"]["error"] = str(e)
+        
+        # Milvus stats
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Check if memory service is responding
+                response = await client.get(f"{MEMORY_URL}/user/analysis")
+                stats["milvus"]["status"] = "connected"
+        except Exception as e:
+            stats["milvus"]["status"] = "disconnected"
+            stats["milvus"]["error"] = str(e)[:100]
+        
+        # Redis stats (MemorySignal)
+        try:
+            from memory_signal import persistent_memory_registry
+            stats["redis"]["memory_signals"] = persistent_memory_registry.summary()
+        except Exception as e:
+            stats["redis"]["error"] = str(e)
+        
+        return stats
 
 
 # Глобальный экземпляр

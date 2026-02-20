@@ -4,6 +4,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
+import httpx
+import sqlalchemy
 from database import engine, Base, get_db, AsyncSessionLocal
 from infrastructure.uow import create_uow_provider, UnitOfWork
 from models import Message, ChatSession, Goal, GoalRelation, InterventionCandidate, InterventionSimulation, InterventionRiskScore, InterventionApproval
@@ -20,6 +22,10 @@ from emotions import analyze_sentiment
 from goal_executor import goal_executor
 from goal_executor_v2 import goal_executor_v2
 from sqlalchemy import select, text, func
+
+# Logging
+from logging_config import get_logger
+logger = get_logger(__name__)
 
 # STEP 2.7: Intervention Readiness Layer imports
 from intervention_candidates_engine import intervention_candidates_engine
@@ -1062,6 +1068,101 @@ async def search_patterns_vector(query: str, limit: int = 5):
     }
 
 
+@app.get("/memory/stats")
+async def get_memory_stats():
+    """
+    Get comprehensive memory system statistics.
+    
+    Returns stats for:
+    - PostgreSQL (patterns)
+    - Milvus (vector DB)
+    - Neo4j (graph)
+    - Redis (memory signals)
+    """
+    from semantic_memory import semantic_memory
+    
+    stats = await semantic_memory.get_stats()
+    
+    return {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        **stats
+    }
+
+
+@app.get("/memory/health")
+async def get_memory_health():
+    """
+    Quick health check for memory systems.
+    
+    Returns:
+        Status of each memory component
+    """
+    health = {
+        "overall": "healthy",
+        "components": {}
+    }
+    
+    # Check PostgreSQL
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.count(Goal.id)).limit(1))
+            health["components"]["postgresql"] = "connected"
+    except Exception as e:
+        health["components"]["postgresql"] = f"error: {str(e)[:50]}"
+        health["overall"] = "degraded"
+    
+    # Check Milvus via memory service
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get("http://memory:8001/user/analysis")
+            health["components"]["milvus"] = "connected"
+    except Exception as e:
+        health["components"]["milvus"] = f"error: {str(e)[:50]}"
+        health["overall"] = "degraded"
+    
+    # Check Redis
+    try:
+        from redis import Redis
+        redis_client = Redis(host='redis', port=6379, db=0)
+        redis_client.ping()
+        health["components"]["redis"] = "connected"
+    except Exception as e:
+        health["components"]["redis"] = f"error: {str(e)[:50]}"
+        health["overall"] = "degraded"
+    
+    # Check Neo4j
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            health["components"]["neo4j"] = "connected"
+    except Exception as e:
+        health["components"]["neo4j"] = f"error: {str(e)[:50]}"
+    
+    return health
+
+
+@app.post("/memory/batch-store")
+async def batch_store_patterns(patterns: list):
+    """
+    Batch store patterns to Milvus.
+    
+    Args:
+        patterns: List of patterns to store
+        
+    Returns:
+        Number of successfully stored patterns
+    """
+    from semantic_memory import semantic_memory
+    
+    count = await semantic_memory.batch_store_patterns_vector(patterns)
+    
+    return {
+        "status": "ok",
+        "stored_count": count,
+        "requested_count": len(patterns)
+    }
+
+
 # ============= ARTIFACT LAYER v1 - Tangible Results =============
 
 @app.post("/artifacts/register")
@@ -1450,7 +1551,7 @@ async def get_llm_status():
     """Получить статус LLM fallback системы"""
     from llm_fallback import llm_fallback
 
-    status = llm_fallback.get_status()
+    status = await llm_fallback.get_status()
     return {
         "status": "ok",
         "llm_status": status
@@ -1460,14 +1561,13 @@ async def get_llm_status():
 @app.post("/llm/reset_groq")
 async def reset_groq_cooldown():
     """Вручную сбросить Groq cooldown и включить его обратно"""
-    from llm_fallback import redis_client, GROQ_DISABLED_KEY, GROQ_FAILURE_KEY
+    from llm_fallback import async_redis, GROQ_DISABLED_KEY, GROQ_FAILURE_KEY
     from llm_fallback import llm_fallback
 
-    # Удаляем ключи из Redis
-    redis_client.delete(GROQ_DISABLED_KEY)
-    redis_client.delete(GROQ_FAILURE_KEY)
+    # Удаляем ключи из Redis (async)
+    await async_redis.delete(GROQ_DISABLED_KEY, GROQ_FAILURE_KEY)
 
-    status = llm_fallback.get_status()
+    status = await llm_fallback.get_status()
 
     return {
         "status": "ok",
