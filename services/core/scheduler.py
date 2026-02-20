@@ -5,13 +5,18 @@ from tasks import run_cron_task
 from resource_manager import SystemMonitor
 from cognition.drive import generate_internal_drive
 
+# Centralized logging
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
 scheduler = AsyncIOScheduler()
 monitor = SystemMonitor()
 
 async def cognitive_heartbeat():
     thought = await generate_internal_drive()
     if "No active goals" not in thought:
-        print(f"💓 Heartbeat: {thought}")
+        logger.info("cognitive_heartbeat", thought=thought)
         run_cron_task.delay(f"internal_{uuid.uuid4()}", thought)
 
 async def execute_atomic_goals():
@@ -21,7 +26,7 @@ async def execute_atomic_goals():
     from models import Goal
     from sqlalchemy import select
 
-    print(f"🎯 [Atomic Scheduler] Checking for incomplete atomic goals...")
+    logger.info("atomic_scheduler_check_incomplete")
 
     executor = GoalExecutorV2()
     async with AsyncSessionLocal() as db:
@@ -34,25 +39,25 @@ async def execute_atomic_goals():
         goals = (await db.execute(stmt)).scalars().all()
 
         if not goals:
-            print(f"   ℹ️  No incomplete atomic goals found")
+            logger.debug("no_incomplete_atomic_goals")
             return
 
-        print(f"   🎯 Found {len(goals)} incomplete atomic goals")
+        logger.info("found_incomplete_atomic_goals", count=len(goals))
 
         for goal in goals:
             progress_pct = int(goal.progress * 100) if goal.progress else 0
-            print(f"   ⚡ Executing: {goal.title[:60]}... ({progress_pct}%)")
+            logger.info("executing_atomic_goal", title=goal.title[:60], progress=f"{progress_pct}%")
 
             try:
                 result = await executor.execute_goal(str(goal.id))
 
                 if result.get("goal_complete"):
-                    print(f"      ✅ COMPLETED: {goal.title[:50]}")
+                    logger.info("atomic_goal_completed", title=goal.title[:50])
                 else:
                     new_progress = int(result.get("progress", 0) * 100) if "progress" in result else progress_pct
-                    print(f"      ⏳ In progress: {new_progress}%")
+                    logger.debug("atomic_goal_in_progress", progress=f"{new_progress}%")
             except Exception as e:
-                print(f"      ❌ Error: {str(e)[:100]}")
+                logger.error("atomic_goal_execution_error", error=str(e)[:100])
 
 
 async def auto_resume_pending_goals():
@@ -66,7 +71,7 @@ async def auto_resume_pending_goals():
     from models import Goal
     from sqlalchemy import select, func
 
-    print(f"🔄 [Auto-Resume Scheduler] Checking for pending goals to decompose...")
+    logger.info("auto_resume_scheduler_check_pending")
 
     async with AsyncSessionLocal() as db:
         # 🔒 FIX: Убрали .limit(5) - теперь обрабатываем ВСЕ цели
@@ -83,15 +88,15 @@ async def auto_resume_pending_goals():
         goals = (await db.execute(stmt)).scalars().all()
 
         if not goals:
-            print(f"   ℹ️  No pending goals without sub-goals found")
+            logger.debug("no_pending_goals_without_children")
             return
 
-        print(f"   🔄 Found {len(goals)} pending goals to decompose")
+        logger.info("found_pending_goals_to_decompose", count=len(goals))
 
         # Decompose through API
         async with httpx.AsyncClient(timeout=600.0) as client:  # 10 min timeout for decomposition
             for goal in goals:
-                print(f"   ⚡ Decomposing: {goal.title[:60]}...")
+                logger.info("decomposing_pending_goal", title=goal.title[:60])
 
                 try:
                     response = await client.post(
@@ -103,11 +108,13 @@ async def auto_resume_pending_goals():
                     if response.status_code == 200:
                         result = response.json()
                         subgoals_count = result.get("subgoals_created", 0)
-                        print(f"      ✅ Created {subgoals_count} sub-goals")
+                        logger.info("subgoals_created", count=subgoals_count)
                     else:
-                        print(f"      ⚠️  HTTP {response.status_code}: {response.text[:100]}")
+                        logger.warning("decompose_http_error",
+                                      status_code=response.status_code,
+                                      response=response.text[:100])
                 except Exception as e:
-                    print(f"      ❌ Error: {str(e)[:100]}")
+                    logger.error("decompose_error", error=str(e)[:100])
 
 
 async def decompose_non_atomic_goals():
@@ -121,7 +128,7 @@ async def decompose_non_atomic_goals():
     from models import Goal
     from sqlalchemy import select, func
 
-    print(f"🧩 [Decomposition Scheduler] Checking for active non-atomic goals to decompose...")
+    logger.info("decomposition_scheduler_check_active")
 
     async with AsyncSessionLocal() as db:
         # 🔒 FIX: Убрали .limit(5), добавили subquery в WHERE
@@ -140,13 +147,13 @@ async def decompose_non_atomic_goals():
         goals = (await db.execute(stmt)).scalars().all()
 
         if not goals:
-            print(f"   ℹ️  All active non-atomic goals have sub-goals")
+            logger.debug("all_active_goals_have_subgoals")
             return
 
-        print(f"   🧩 Found {len(goals)} active goals to decompose")
+        logger.info("found_active_goals_to_decompose", count=len(goals))
 
         for goal in goals:
-            print(f"   🧩 Decomposing: {goal.title[:60]}...")
+            logger.info("decomposing_active_goal", title=goal.title[:60])
 
             try:
                 # Use HTTP API with timeout instead of direct function call
@@ -161,14 +168,16 @@ async def decompose_non_atomic_goals():
                         result = response.json()
                         subgoals_count = result.get("subgoals_created", 0)
                         if subgoals_count > 0:
-                            print(f"      ✅ Created {subgoals_count} sub-goals")
+                            logger.info("subgoals_created_for_active", count=subgoals_count)
                         else:
-                            print(f"      ⚠️  No sub-goals created")
+                            logger.warning("no_subgoals_created_for_active")
                     else:
-                        print(f"      ⚠️  HTTP {response.status_code}: {response.text[:100]}")
+                        logger.warning("decompose_active_http_error",
+                                      status_code=response.status_code,
+                                      response=response.text[:100])
 
             except Exception as e:
-                print(f"      ❌ Error: {str(e)[:100]}")
+                logger.error("decompose_active_error", error=str(e)[:100])
 
 async def run_nightly_invariants_check():
     """
@@ -178,28 +187,30 @@ async def run_nightly_invariants_check():
     """
     from invariants_checker import run_invariants_check
 
-    print(f"🔍 [Invariants Checker] Running nightly state-machine verification...")
+    logger.info("nightly_invariants_check_started")
 
     try:
         result = await run_invariants_check()
 
         if result["overall_status"] == "PASS":
-            print(f"   ✅ All invariants PASS")
-            print(f"   📊 {result['summary']['passed']}/{result['summary']['total_checks']} checks passed")
+            logger.info("all_invariants_pass",
+                       passed=result['summary']['passed'],
+                       total=result['summary']['total_checks'])
         elif result["overall_status"] == "VIOLATION":
-            print(f"   ⚠️  INVARIANTS VIOLATION DETECTED!")
-            print(f"   📊 {result['summary']['violations']} violations found")
+            logger.warning("invariants_violation_detected",
+                          violations=result['summary']['violations'])
 
-            # Выводим детальную информацию
+            # Log detailed violations
             for check in result['invariant_checks']:
                 if check['status'] == 'VIOLATION':
-                    print(f"\n   🔴 {check['invariant']}:")
-                    print(f"      {check['message']}")
+                    logger.error("invariant_violation",
+                                invariant=check['invariant'],
+                                message=check['message'])
         else:  # ERROR
-            print(f"   ❌ INvariants check ERROR: {result['summary']['errors']} errors")
+            logger.error("invariants_check_error", errors=result['summary']['errors'])
 
     except Exception as e:
-        print(f"   ❌ Error running invariants check: {str(e)}")
+        logger.error("invariants_check_exception", error=str(e))
 
 
 def start_scheduler():
@@ -225,10 +236,10 @@ def start_scheduler():
     )
 
     scheduler.start()
-    print("✅ Scheduler started:")
-    print("   - Cognitive heartbeat: every 10 min")
-    print("   - Atomic goals executor: every 5 min")
-    print("   - Pending goals auto-resume: every 5 min")
-    print("   - Decomposition scheduler: every 10 min")
-    print("   🔒 Invariants check: daily at 3:00 AM")
+    logger.info("scheduler_started",
+               cognitive_heartbeat="every 10 min",
+               atomic_executor="every 5 min",
+               auto_resume="every 5 min",
+               decomposition="every 10 min",
+               invariants_check="daily at 3:00 AM")
 
