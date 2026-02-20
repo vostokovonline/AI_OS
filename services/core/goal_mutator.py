@@ -93,7 +93,7 @@ class GoalMutator:
         - Добавить дополнительные домены
         - Ужесточить completion_criteria
         """
-        print(f"🔺 Strengthening goal: {goal.title}")
+        logger.info(f"🔺 Strengthening goal: {goal.title}")
 
         # Генерируем усиленные критерии
         strengthen_prompt = f"""Усили эту цель - повысь критерии успеха:
@@ -186,7 +186,7 @@ class GoalMutator:
         - Убрать некоторые домены
         - Упростить completion_criteria
         """
-        print(f"🔻 Weakening goal: {goal.title}")
+        logger.info(f"🔻 Weakening goal: {goal.title}")
 
         weaken_prompt = f"""Ослабь эту цель - упрости критерии успеха:
 
@@ -281,7 +281,7 @@ class GoalMutator:
         - directional → continuous
         - achievable → exploratory
         """
-        print(f"🔄 Changing goal type: {goal.title}")
+        logger.info(f"🔄 Changing goal type: {goal.title}")
 
         new_type = params.get("new_type")
 
@@ -376,7 +376,7 @@ class GoalMutator:
         - Не декомпозируются
         - Не оцениваются
         """
-        print(f"❄️ Freezing goal: {goal.title}")
+        logger.info(f"❄️ Freezing goal: {goal.title}")
 
         async with AsyncSessionLocal() as db:
             stmt = select(Goal).where(Goal.id == goal.id)
@@ -414,7 +414,7 @@ class GoalMutator:
         """
         Размораживает цель - возобновляет выполнение
         """
-        print(f"🔥 Thawing goal: {goal.title}")
+        logger.info(f"🔥 Thawing goal: {goal.title}")
 
         async with AsyncSessionLocal() as db:
             stmt = select(Goal).where(Goal.id == goal.id)

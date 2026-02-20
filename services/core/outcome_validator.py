@@ -451,7 +451,7 @@ async def validate_goal_outcome(goal_id: str) -> Dict:
 
         result = await validate_goal_outcome("goal-uuid")
         if result["passed"]:
-            print(f"Goal passed: {result['recommendations']}")
+            logger.info(f"Goal passed: {result['recommendations']}")
     """
     return await outcome_validator.validate(goal_id)
 
@@ -598,12 +598,12 @@ if __name__ == "__main__":
     import uuid
 
     async def test():
-        print("Testing OutcomeValidator...")
+        logger.info("Testing OutcomeValidator...")
 
         # Create test goal
         goal_id = str(uuid.uuid4())
 
-        print(f"Test goal ID: {goal_id}")
-        print("Validator initialized successfully")
+        logger.info(f"Test goal ID: {goal_id}")
+        logger.info("Validator initialized successfully")
 
     asyncio.run(test())

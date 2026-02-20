@@ -66,7 +66,7 @@ class InterventionCandidatesEngine:
             active_alerts = result.scalars().all()
 
             if not active_alerts:
-                print("ℹ️  [IRL] No active alerts — no candidates generated")
+                logger.info("ℹ️  [IRL] No active alerts — no candidates generated")
                 return []
 
             # 2. Group alerts by type
@@ -90,10 +90,10 @@ class InterventionCandidatesEngine:
                         db.add(candidate)
                         db.flush()  # Get ID before commit
 
-                        print(f"💡 [IRL] Generated candidate: {candidate.intervention_type}")
-                        print(f"   Hypothesis: {candidate.hypothesis[:80]}...")
-                        print(f"   Expected gain: {candidate.expected_gain:.3f}")
-                        print(f"   Estimated risk: {candidate.estimated_risk:.3f}")
+                        logger.info(f"💡 [IRL] Generated candidate: {candidate.intervention_type}")
+                        logger.info(f"   Hypothesis: {candidate.hypothesis[:80]}...")
+                        logger.info(f"   Expected gain: {candidate.expected_gain:.3f}")
+                        logger.info(f"   Estimated risk: {candidate.estimated_risk:.3f}")
 
                         candidates.append(candidate)
 
@@ -102,7 +102,7 @@ class InterventionCandidatesEngine:
             return candidates
 
         except Exception as e:
-            print(f"⚠️  [IRL] Failed to generate candidates: {e}")
+            logger.info(f"⚠️  [IRL] Failed to generate candidates: {e}")
             db.rollback()
             return []
 

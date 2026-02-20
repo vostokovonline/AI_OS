@@ -486,10 +486,10 @@ async def run_invariants_check() -> Dict:
 if __name__ == "__main__":
     import asyncio
     result = asyncio.run(run_invariants_check())
-    print(f"🔍 Invariants Check Result: {result['overall_status']}")
-    print(f"   Summary: {result['summary']}")
+    logger.info(f"🔍 Invariants Check Result: {result['overall_status']}")
+    logger.info(f"   Summary: {result['summary']}")
 
     for check in result['invariant_checks']:
         if check['status'] != 'PASS':
-            print(f"\n⚠️  {check['invariant']}: {check['status']}")
-            print(f"   {check['message']}")
+            logger.info(f"\n⚠️  {check['invariant']}: {check['status']}")
+            logger.info(f"   {check['message']}")

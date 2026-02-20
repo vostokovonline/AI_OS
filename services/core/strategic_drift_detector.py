@@ -551,19 +551,19 @@ if __name__ == "__main__":
     import asyncio
 
     async def test():
-        print("Testing Strategic Drift Detector...\n")
+        logger.info("Testing Strategic Drift Detector...\n")
 
         # Run all detections
         drifts = await strategic_drift_detector.detect_all_drifts()
 
-        print(f"Overall Status: {drifts['overall_status']}")
-        print(f"Drifts Detected: {drifts['drifts_detected']}")
-        print("\nDrifts by Type:")
+        logger.info(f"Overall Status: {drifts['overall_status']}")
+        logger.info(f"Drifts Detected: {drifts['drifts_detected']}")
+        logger.info("\nDrifts by Type:")
         for drift_type, count in drifts['drifts_by_type'].items():
-            print(f"  {drift_type}: {count}")
+            logger.info(f"  {drift_type}: {count}")
 
-        print("\nTop Drifts:")
+        logger.info("\nTop Drifts:")
         for drift in drifts['drifts'][:5]:
-            print(f"  [{drift['severity'].upper()}] {drift['description']}")
+            logger.info(f"  [{drift['severity'].upper()}] {drift['description']}")
 
     asyncio.run(test())

@@ -398,13 +398,13 @@ if __name__ == "__main__":
     import asyncio
 
     async def test():
-        print("Testing Goal Velocity Engine...\n")
+        logger.info("Testing Goal Velocity Engine...\n")
 
         # Test velocity calculation
         metrics = await goal_velocity_engine.calculate_velocity_metrics()
 
-        print("Velocity State:", metrics["velocity_state"])
-        print("Metrics:", metrics["metrics"])
-        print("Recommendations:", metrics["recommendations"])
+        logger.info("Velocity State:", metrics["velocity_state"])
+        logger.info("Metrics:", metrics["metrics"])
+        logger.info("Recommendations:", metrics["recommendations"])
 
     asyncio.run(test())

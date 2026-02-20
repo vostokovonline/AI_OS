@@ -79,7 +79,7 @@ class GoalPlanner:
         try:
             artifact_types = [ArtifactType(t) for t in required_artifacts]
         except ValueError as e:
-            print(f"❌ Invalid artifact type: {e}")
+            logger.info(f"❌ Invalid artifact type: {e}")
             return None
 
         # 2. Формируем запрос
@@ -94,7 +94,7 @@ class GoalPlanner:
         candidates = self._find_candidates(query)
 
         if not candidates:
-            print(f"⚠️ No skills found for requirements: {required_artifacts}")
+            logger.info(f"⚠️ No skills found for requirements: {required_artifacts}")
             return None
 
         # 4. Выбираем лучший (детерминированно!)
@@ -319,10 +319,10 @@ def example_usage():
     # Plan execution
     plan = planner.plan_execution(goal)
 
-    print(f"✅ Selected skill: {plan['skill_name']}")
-    print(f"📥 Inputs: {plan['inputs']}")
-    print(f"📦 Expected artifacts: {len(plan['expected_artifacts'])}")
-    print(f"🔍 Verification rules: {len(plan['verification_rules'])}")
+    logger.info(f"✅ Selected skill: {plan['skill_name']}")
+    logger.info(f"📥 Inputs: {plan['inputs']}")
+    logger.info(f"📦 Expected artifacts: {len(plan['expected_artifacts'])}")
+    logger.info(f"🔍 Verification rules: {len(plan['verification_rules'])}")
 
     # Execute skill
     from skills.production_skills import SkillFactory
@@ -335,8 +335,8 @@ def example_usage():
         goal_id=goal["id"]
     ))
 
-    print(f"🎯 Execution result: {result.status}")
-    print(f"📦 Artifacts produced: {len(result.artifacts)}")
+    logger.info(f"🎯 Execution result: {result.status}")
+    logger.info(f"📦 Artifacts produced: {len(result.artifacts)}")
 
 
 # Глобальный экземпляр

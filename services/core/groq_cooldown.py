@@ -100,7 +100,7 @@ class GroqCooldownManager:
             "in_cooldown": True
         })
 
-        print(f"⚠️  Groq error #{error_count} recorded. Activating {COOLDOWN_HOURS}-hour cooldown.")
+        logger.info(f"⚠️  Groq error #{error_count} recorded. Activating {COOLDOWN_HOURS}-hour cooldown.")
         return COOLDOWN_HOURS * 3600  # Время cooldown в секундах
 
     def reset(self):
@@ -110,7 +110,7 @@ class GroqCooldownManager:
             "error_count": 0,
             "in_cooldown": False
         })
-        print("✅ Groq cooldown reset manually")
+        logger.info("✅ Groq cooldown reset manually")
 
 
 # Global instance
@@ -165,9 +165,9 @@ if __name__ == "__main__":
     cooldown = get_groq_cooldown()
     status = get_groq_cooldown_status()
 
-    print(f"Groq Cooldown Status: {json.dumps(status, indent=2)}")
+    logger.info(f"Groq Cooldown Status: {json.dumps(status, indent=2)}")
 
     if status["in_cooldown"]:
-        print(f"⚠️  Groq is in cooldown for {status['remaining_human']}")
+        logger.info(f"⚠️  Groq is in cooldown for {status['remaining_human']}")
     else:
-        print("✅ Groq is available")
+        logger.info("✅ Groq is available")

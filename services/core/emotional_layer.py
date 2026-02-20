@@ -67,19 +67,19 @@ class EmotionalLayer:
             EmotionalInfluence with decision modifiers
         """
 
-        print(f"🔍 [Emotional Layer] Getting influence for user {user_id}")
+        logger.info(f"🔍 [Emotional Layer] Getting influence for user {user_id}")
 
         # 1. Get current state (or baseline)
         current_state = await self._get_current_state(user_id)
-        print(f"   Current state: {current_state}")
+        logger.info(f"   Current state: {current_state}")
 
         # 2. Infer new state from signals
         inferred_state = self.inference_engine.infer(signals)
-        print(f"   Inferred state: {inferred_state}")
+        logger.info(f"   Inferred state: {inferred_state}")
 
         # 3. Aggregate (EMA smoothing)
         aggregated_state = self.aggregator.aggregate(current_state, inferred_state)
-        print(f"   Aggregated state: {aggregated_state}")
+        logger.info(f"   Aggregated state: {aggregated_state}")
 
         # 4. Save to DB
         await self._save_state(user_id, aggregated_state, signals)
@@ -87,7 +87,7 @@ class EmotionalLayer:
         # 5. Map to influence
         influence = self.influence_engine.map_to_influence(aggregated_state)
 
-        print(f"   Influence: {influence}")
+        logger.info(f"   Influence: {influence}")
         return influence
 
     async def get_influence_context(
@@ -115,7 +115,7 @@ class EmotionalLayer:
         context = self.context_mapper.to_context(influence)
 
         # Log for debugging
-        print(f"💾 [Emotional Layer] Saved state for user {user_id}: {influence}")
+        logger.info(f"💾 [Emotional Layer] Saved state for user {user_id}: {influence}")
 
         return context
 
@@ -240,9 +240,9 @@ class EmotionalLayer:
                 db.add(emotional_state)
                 await db.commit()
 
-                print(f"✅ [Emotional Layer] State saved to DB: user={user_id}, arousal={state['arousal']:.2f}, valence={state['valence']:.2f}")
+                logger.info(f"✅ [Emotional Layer] State saved to DB: user={user_id}, arousal={state['arousal']:.2f}, valence={state['valence']:.2f}")
         except Exception as e:
-            print(f"❌ [Emotional Layer] Failed to save state: {e}")
+            logger.info(f"❌ [Emotional Layer] Failed to save state: {e}")
             # Don't raise - allow system to continue without emotional tracking
 
 

@@ -73,7 +73,7 @@ class CounterfactualSimulator:
             candidate = result_candidate.scalar_one_or_none()
 
             if not candidate:
-                print(f"⚠️  [Simulator] Candidate {intervention_id} not found")
+                logger.info(f"⚠️  [Simulator] Candidate {intervention_id} not found")
                 return None
 
             # 2. Get historical data (forecasts + outcomes)
@@ -99,7 +99,7 @@ class CounterfactualSimulator:
             historical_records = result_data.fetchall()
 
             if len(historical_records) < 10:
-                print(f"⚠️  [Simulator] Insufficient historical data: {len(historical_records)} records")
+                logger.info(f"⚠️  [Simulator] Insufficient historical data: {len(historical_records)} records")
                 return None
 
             # 3. Compute metrics BEFORE intervention (baseline)
@@ -147,16 +147,16 @@ class CounterfactualSimulator:
 
             db.commit()
 
-            print(f"🎮 [Simulator] Completed simulation for {candidate.intervention_type}")
-            print(f"   Records: {len(historical_records)}")
-            print(f"   Direction accuracy: {metrics_before['direction_accuracy']:.3f} → {metrics_after['direction_accuracy']:.3f}")
-            print(f"   Delta: {delta_metrics.get('direction_accuracy', 0):.3f}")
-            print(f"   Determinism hash: {determinism_hash}")
+            logger.info(f"🎮 [Simulator] Completed simulation for {candidate.intervention_type}")
+            logger.info(f"   Records: {len(historical_records)}")
+            logger.info(f"   Direction accuracy: {metrics_before['direction_accuracy']:.3f} → {metrics_after['direction_accuracy']:.3f}")
+            logger.info(f"   Delta: {delta_metrics.get('direction_accuracy', 0):.3f}")
+            logger.info(f"   Determinism hash: {determinism_hash}")
 
             return simulation
 
         except Exception as e:
-            print(f"⚠️  [Simulator] Simulation failed: {e}")
+            logger.info(f"⚠️  [Simulator] Simulation failed: {e}")
             import traceback
             traceback.print_exc()
             db.rollback()

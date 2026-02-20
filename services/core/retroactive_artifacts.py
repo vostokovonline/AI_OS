@@ -301,10 +301,10 @@ class RetroactiveArtifactGenerator:
                 )
 
                 artifacts_created.append(artifact)
-                print(f"✅ Artifact created for goal: {goal_info['title']}")
+                logger.info(f"✅ Artifact created for goal: {goal_info['title']}")
 
             except Exception as e:
-                print(f"❌ Error creating artifact for goal {goal_info['title']}: {e}")
+                logger.info(f"❌ Error creating artifact for goal {goal_info['title']}: {e}")
                 continue
 
         return artifacts_created
@@ -381,26 +381,26 @@ async def main():
     """
     Основная функция для запуска генерации.
     """
-    print("🔍 Searching for completed goals without artifacts...")
+    logger.info("🔍 Searching for completed goals without artifacts...")
 
     goals = await RetroactiveArtifactGenerator.find_completed_goals_without_artifacts()
 
     if not goals:
-        print("✅ No completed goals without artifacts found!")
+        logger.info("✅ No completed goals without artifacts found!")
         return
 
-    print(f"Found {len(goals)} completed goals without artifacts:")
+    logger.info(f"Found {len(goals)} completed goals without artifacts:")
     for g in goals[:5]:
-        print(f"  - {g['title']} ({g['id']})")
+        logger.info(f"  - {g['title']} ({g['id']})")
 
     if len(goals) > 5:
-        print(f"  ... and {len(goals) - 5} more")
+        logger.info(f"  ... and {len(goals) - 5} more")
 
-    print(f"\n🔧 Generating artifacts...")
+    logger.info(f"\n🔧 Generating artifacts...")
 
     result = await batch_fix_all_goals()
 
-    print(f"\n✅ Done! Fixed {result['fixed_count']} goals")
+    logger.info(f"\n✅ Done! Fixed {result['fixed_count']} goals")
 
 
 if __name__ == "__main__":
