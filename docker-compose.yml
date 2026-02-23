@@ -21,6 +21,7 @@ services:
     - litellm
     env_file: .env
     environment:
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8501,http://localhost:8000,http://172.25.50.61:3000,http://10.255.255.254:3000,http://172.25.50.61:8501,http://10.255.255.254:8501
       ARTIFACTS_PATH: /data/artifacts
       FALLBACK_MODEL: ${FALLBACK_MODEL:-ollama/qwen2.5-coder:latest}
       GROQ_COOLDOWN_HOURS: ${GROQ_COOLDOWN_HOURS:-1}

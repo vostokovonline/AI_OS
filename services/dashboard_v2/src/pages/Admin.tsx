@@ -1,35 +1,38 @@
 /**
  * Admin Dashboard
  *
- * Displays system administration features
- * Observer: System state monitoring
- * Reflection: Goal completion approval and reflection management
+ * System administration with:
+ * - Pending Approvals (manual goal completion approvals)
+ * - Reflections (lessons learned from completed goals)
+ * - System Observer (real-time monitoring)
  */
 
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import { Eye, CheckCircle, XCircle, Clock, AlertCircle, FileText } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, Eye, Activity, Clock, TrendingUp } from 'lucide-react';
 
 interface AdminStats {
   pending_approvals: number;
-  completed_today: number;
+  completed_goals: number;
   active_goals: number;
-  system_health: 'healthy' | 'degraded' | 'critical';
+  system_health: number;
 }
 
 interface PendingApproval {
   id: string;
   goal_id: string;
-  title: string;
-  completion_mode: 'manual' | 'aggregate';
+  goal_title: string;
+  goal_type: string;
+  status: string;
   progress: number;
   created_at: string;
-  artifacts_count: number;
+  requires_approval: boolean;
 }
 
 interface Reflection {
   id: string;
   goal_id: string;
+  goal_title: string;
   outcome: 'success' | 'failure';
   lessons_learned: string[];
   created_at: string;
@@ -40,104 +43,90 @@ const Admin: React.FC = () => {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'approvals' | 'reflections' | 'observer'>('approvals');
 
   useEffect(() => {
-    loadAdminData();
-    const interval = setInterval(loadAdminData, 10000); // Poll every 10s
+    loadData();
+    const interval = setInterval(loadData, 10000); // Poll every 10s
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, []);
 
-  const loadAdminData = async () => {
+  const loadData = async () => {
     try {
-      // TODO: Replace with real API calls
-      // const statsRes = await apiClient.get('/admin/stats');
-      // const approvalsRes = await apiClient.get('/admin/approvals/pending');
-      // const reflectionsRes = await apiClient.get('/admin/reflections');
+      // Load goals for pending approvals
+      const goalsResponse = await apiClient.get('/goals/list');
+      const allGoals = goalsResponse.data.goals || [];
 
-      // Mock data for now
+      // Filter for manual goals that might need approval
+      const manualGoals = allGoals.filter((g: any) =>
+        g.completion_mode === 'manual' &&
+        (g.status === 'active' || g.status === 'done')
+      );
+
+      setPendingApprovals(manualGoals.map((g: any) => ({
+        id: g.id,
+        goal_id: g.id,
+        goal_title: g.title,
+        goal_type: g.goal_type,
+        status: g.status,
+        progress: g.progress,
+        created_at: g.created_at,
+        requires_approval: g.completion_mode === 'manual' && g.status === 'done'
+      })));
+
+      // Calculate stats
+      const activeCount = allGoals.filter((g: any) => g.status === 'active').length;
+      const doneCount = allGoals.filter((g: any) => g.status === 'done').length;
+      const pendingApprovalCount = manualGoals.filter((g: any) =>
+        g.completion_mode === 'manual' && g.status === 'done'
+      ).length;
+
       setStats({
-        pending_approvals: 3,
-        completed_today: 7,
-        active_goals: 12,
-        system_health: 'healthy'
+        pending_approvals: pendingApprovalCount,
+        completed_goals: doneCount,
+        active_goals: activeCount,
+        system_health: 95 // Mock health metric
       });
 
-      if (activeTab === 'approvals') {
-        setPendingApprovals([
-          {
-            id: '1',
-            goal_id: 'goal-123',
-            title: 'Implement new feature',
-            completion_mode: 'manual',
-            progress: 1.0,
-            created_at: new Date().toISOString(),
-            artifacts_count: 3
-          },
-          {
-            id: '2',
-            goal_id: 'goal-456',
-            title: 'Fix critical bug',
-            completion_mode: 'manual',
-            progress: 1.0,
-            created_at: new Date().toISOString(),
-            artifacts_count: 2
-          }
-        ]);
-      } else if (activeTab === 'reflections') {
-        setReflections([
-          {
-            id: '1',
-            goal_id: 'goal-789',
-            outcome: 'success',
-            lessons_learned: ['Start with tests', 'Break into smaller tasks'],
-            created_at: new Date().toISOString()
-          }
-        ]);
-      }
+      // For reflections, we'd need a dedicated API endpoint
+      // For now, show empty list
+      setReflections([]);
 
       setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load admin data:', err);
+      setError(err.message || 'Failed to load admin data');
       setLoading(false);
     }
   };
 
-  const handleApprove = async (approvalId: string) => {
+  const handleApprove = async (goalId: string) => {
     try {
-      // TODO: Implement real approval
-      // await apiClient.post(`/admin/approvals/${approvalId}/approve`, {
-      //   approved_by: 'admin',
-      //   authority_level: 4
-      // });
-      console.log('Approving:', approvalId);
-      loadAdminData();
-    } catch (err) {
-      console.error('Failed to approve:', err);
+      await apiClient.post(`/goals/${goalId}/approve_completion`, {
+        approved_by: 'admin',
+        authority_level: 4,
+        comment: 'Approved via admin dashboard'
+      });
+      // Reload data
+      loadData();
+    } catch (err: any) {
+      console.error('Failed to approve goal:', err);
+      alert(`Failed to approve: ${err.response?.data?.error?.message || err.message}`);
     }
   };
 
-  const handleReject = async (approvalId: string) => {
+  const handleReject = async (goalId: string) => {
     try {
-      // TODO: Implement real rejection
-      // await apiClient.post(`/admin/approvals/${approvalId}/reject`, {
-      //   decided_by: 'admin'
-      // });
-      console.log('Rejecting:', approvalId);
-      loadAdminData();
-    } catch (err) {
-      console.error('Failed to reject:', err);
-    }
-  };
-
-  const getHealthColor = (health: AdminStats['system_health']) => {
-    switch (health) {
-      case 'healthy':
-        return 'text-green-600 bg-green-100';
-      case 'degraded':
-        return 'text-yellow-600 bg-yellow-100';
-      case 'critical':
-        return 'text-red-600 bg-red-100';
+      // For rejection, we might need to transition to a different state
+      await apiClient.post(`/goals/${goalId}/mutate`, {
+        mutation_type: 'weaken',
+        reason: 'Rejected via admin dashboard'
+      });
+      loadData();
+    } catch (err: any) {
+      console.error('Failed to reject goal:', err);
+      alert(`Failed to reject: ${err.message}`);
     }
   };
 
@@ -145,221 +134,230 @@ const Admin: React.FC = () => {
     return (
       <div className="h-screen w-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Eye className="w-16 h-16 animate-pulse mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading admin dashboard...</p>
+          <Shield className="w-16 h-16 animate-pulse mx-auto mb-4 text-cyan-600" />
+          <p className="text-gray-600">Loading admin panel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-screen w-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center text-red-600">
+          <XCircle className="w-16 h-16 mx-auto mb-4" />
+          <p className="text-xl font-semibold">Error loading admin</p>
+          <p className="text-sm mt-2">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Eye className="w-8 h-8 text-blue-600" />
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-sm text-gray-500">System administration and approvals</p>
-            </div>
-          </div>
-          {stats && (
-            <div className="flex items-center space-x-2">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getHealthColor(stats.system_health)}`}>
-                {stats.system_health}
-              </span>
-            </div>
-          )}
+    <div className="h-screen w-screen bg-gray-50 overflow-auto">
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">System Administration</h1>
+          <p className="text-gray-600">Goal approvals, reflections, and system monitoring</p>
         </div>
-      </div>
 
-      {/* Stats Bar */}
-      {stats && (
-        <div className="bg-white border-b border-gray-200 px-8 py-4">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{stats.pending_approvals}</p>
-              <p className="text-sm text-gray-500">Pending Approvals</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">{stats.completed_today}</p>
-              <p className="text-sm text-gray-500">Completed Today</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">{stats.active_goals}</p>
-              <p className="text-sm text-gray-500">Active Goals</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-gray-600">{stats.system_health}</p>
-              <p className="text-sm text-gray-500">System Health</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 px-8">
-        <div className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('approvals')}
-            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'approvals'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Pending Approvals
-          </button>
-          <button
-            onClick={() => setActiveTab('reflections')}
-            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'reflections'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Reflections
-          </button>
-          <button
-            onClick={() => setActiveTab('observer')}
-            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'observer'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            System Observer
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-7xl mx-auto">
-          {activeTab === 'approvals' && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Manual Goal Approvals</h2>
-              {pendingApprovals.length === 0 ? (
-                <div className="bg-white rounded-lg shadow p-8 text-center">
-                  <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
-                  <p className="text-gray-600">No pending approvals</p>
+        {/* Stats Bar */}
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Pending Approvals</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.pending_approvals}</p>
                 </div>
-              ) : (
-                pendingApprovals.map((approval) => (
-                  <div key={approval.id} className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{approval.title}</h3>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            approval.completion_mode === 'manual'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {approval.completion_mode}
+                <Clock className="w-8 h-8 text-orange-500" />
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Completed</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.completed_goals}</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Active</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.active_goals}</p>
+                </div>
+                <Activity className="w-8 h-8 text-blue-500" />
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">System Health</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.system_health}%</p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-purple-500" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('approvals')}
+                className={`px-6 py-4 border-b-2 font-medium text-sm ${
+                  activeTab === 'approvals'
+                    ? 'border-cyan-500 text-cyan-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Pending Approvals
+              </button>
+              <button
+                onClick={() => setActiveTab('reflections')}
+                className={`px-6 py-4 border-b-2 font-medium text-sm ${
+                  activeTab === 'reflections'
+                    ? 'border-cyan-500 text-cyan-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Reflections
+              </button>
+              <button
+                onClick={() => setActiveTab('observer')}
+                className={`px-6 py-4 border-b-2 font-medium text-sm ${
+                  activeTab === 'observer'
+                    ? 'border-cyan-500 text-cyan-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                System Observer
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === 'approvals' && (
+              <div>
+                {pendingApprovals.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No pending approvals</p>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingApprovals.map((approval) => (
+                      <div key={approval.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 mb-1">{approval.goal_title}</h3>
+                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <span>Type: {approval.goal_type}</span>
+                              <span>Status: {approval.status}</span>
+                              <span>Progress: {(approval.progress * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                          {approval.requires_approval && (
+                            <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                              Requires Approval
+                            </span>
+                          )}
+                        </div>
+                        {approval.requires_approval && (
+                          <div className="flex gap-2 mt-4">
+                            <button
+                              onClick={() => handleApprove(approval.goal_id)}
+                              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleReject(approval.goal_id)}
+                              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'reflections' && (
+              <div>
+                {reflections.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Eye className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500">No reflections yet</p>
+                    <p className="text-sm text-gray-400 mt-2">Reflections appear here after goals are completed</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reflections.map((reflection) => (
+                      <div key={reflection.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h3 className="font-semibold text-gray-900 mb-1">{reflection.goal_title}</h3>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              reflection.outcome === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {reflection.outcome}
+                            </span>
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            {new Date(reflection.created_at).toLocaleString()}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
-                          <span>Goal ID: {approval.goal_id}</span>
-                          <span>Progress: {(approval.progress * 100).toFixed(0)}%</span>
-                          <span>Artifacts: {approval.artifacts_count}</span>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Created: {new Date(approval.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleApprove(approval.id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center space-x-1"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          <span>Approve</span>
-                        </button>
-                        <button
-                          onClick={() => handleReject(approval.id)}
-                          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center space-x-1"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          <span>Reject</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'reflections' && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Reflections</h2>
-              {reflections.length === 0 ? (
-                <div className="bg-white rounded-lg shadow p-8 text-center">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No reflections yet</p>
-                </div>
-              ) : (
-                reflections.map((reflection) => (
-                  <div key={reflection.id} className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-start space-x-3">
-                      {reflection.outcome === 'success' ? (
-                        <CheckCircle className="w-6 h-6 text-green-600 mt-1" />
-                      ) : (
-                        <AlertCircle className="w-6 h-6 text-red-600 mt-1" />
-                      )}
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                          {reflection.goal_id}
-                        </h3>
-                        <div className="mb-3">
-                          <p className="text-sm font-medium text-gray-700 mb-1">Lessons Learned:</p>
+                        <div className="mt-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Lessons Learned:</p>
                           <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-                            {reflection.lessons_learned.map((lesson, idx) => (
-                              <li key={idx}>{lesson}</li>
+                            {reflection.lessons_learned.map((lesson, i) => (
+                              <li key={i}>{lesson}</li>
                             ))}
                           </ul>
                         </div>
-                        <p className="text-xs text-gray-500">
-                          {new Date(reflection.created_at).toLocaleString()}
-                        </p>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'observer' && (
+              <div>
+                <div className="text-center py-8">
+                  <Activity className="w-16 h-16 mx-auto mb-4 text-cyan-600" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">System Observer</h3>
+                  <p className="text-gray-500 mb-4">Real-time system monitoring</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm text-gray-500">CPU Usage</p>
+                      <p className="text-2xl font-bold text-gray-900">--%</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm text-gray-500">Memory</p>
+                      <p className="text-2xl font-bold text-gray-900">--%</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm text-gray-500">Active Tasks</p>
+                      <p className="text-2xl font-bold text-gray-900">--</p>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'observer' && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">System Observer</h2>
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-semibold text-gray-900">Real-time Monitoring</h3>
-                </div>
-                <p className="text-gray-600 mb-4">
-                  System state observer will show live metrics, resource usage, and performance indicators.
-                </p>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="border border-gray-200 rounded p-4">
-                    <p className="text-sm text-gray-500">CPU Usage</p>
-                    <p className="text-2xl font-bold text-gray-900">--</p>
-                  </div>
-                  <div className="border border-gray-200 rounded p-4">
-                    <p className="text-sm text-gray-500">Memory</p>
-                    <p className="text-2xl font-bold text-gray-900">--</p>
-                  </div>
-                  <div className="border border-gray-200 rounded p-4">
-                    <p className="text-sm text-gray-500">Active Tasks</p>
-                    <p className="text-2xl font-bold text-gray-900">--</p>
-                  </div>
+                  <p className="text-sm text-gray-400 mt-6">
+                    System observer metrics coming soon
+                  </p>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

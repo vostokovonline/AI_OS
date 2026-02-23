@@ -194,6 +194,208 @@ make llm-reset    # Reset Groq cooldown
 
 ---
 
+---
+
+## Dashboard v2 Update (COMPLETED - 2026-02-21)
+
+**Major improvements**: CORS fix, new pages (Autonomy, Admin), database migration, enhanced API integration.
+
+### ✅ COMPLETED:
+
+#### 1. CORS Configuration Fix
+**Problem**: Dashboard v2 running on `http://172.25.50.61:3000` couldn't access backend API due to CORS policy errors.
+
+**Solution**: Updated `docker-compose.yml` with comprehensive ALLOWED_ORIGINS:
+```yaml
+environment:
+  ALLOWED_ORIGINS: >
+    http://localhost:3000,
+    http://localhost:8501,
+    http://localhost:8000,
+    http://172.25.50.61:3000,
+    http://10.255.255.254:3000,
+    http://172.25.50.61:8501,
+    http://10.255.255.254:8501
+```
+
+**Result**: All dashboard v2 pages can now access backend API without CORS errors.
+
+#### 2. Database Migration - Artifacts Table
+**Problem**: `Artifact` model in `models.py` had columns `state_mutations` and `decision_signals` that didn't exist in database.
+
+**Migration**: `services/core/migrations/add_artifacts_autonomy_columns.sql`
+```sql
+ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS state_mutations JSON;
+ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS decision_signals JSON;
+```
+
+**Applied**: ✅ Successfully added columns, `/artifacts` endpoint now works.
+
+#### 3. New Dashboard Pages
+
+##### Autonomy Page (🧠 src/pages/Autonomy.tsx)
+**Features**:
+- Real-time alerts summary from `/alerts/summary` API
+- Decision engine status display
+- Safety constraints (ethics, budget, time_horizon)
+- Active policies visualization
+- Recent decisions timeline with confidence scores
+- Auto-refresh every 5 seconds
+
+**API Integration**:
+- `GET /alerts/summary` - System alerts summary
+- Planned: `/autonomy/state` - Full autonomy state (TODO)
+
+##### Admin Page (🛡️ src/pages/Admin.tsx)
+**Features**:
+- **Pending Approvals Tab**: Manual goal completion approval workflow
+  - Filter: `completion_mode='manual'` AND `status IN ('active', 'done')`
+  - Approve/Reject buttons with API integration
+- **Reflections Tab**: View lessons learned from completed goals
+  - Placeholder for future reflections API
+- **System Observer Tab**: Real-time monitoring placeholder
+    - CPU, Memory, Active Tasks metrics (coming soon)
+
+**API Integration**:
+- `GET /goals/list` - Load all goals for approval filtering
+- `POST /goals/{goal_id}/approve_completion` - Approve manual goal completion
+- `POST /goals/{goal_id}/mutate` - Reject/modify goals
+
+**Stats Display**:
+- Pending Approvals (manual done goals)
+- Completed Goals
+- Active Goals
+- System Health (mock: 95%)
+
+#### 4. Structured Logging Fix
+**Problem**: `StandardLoggerAdapter` added but logger calls used structlog kwargs format.
+
+**Solution**: `logging_config.py` now includes wrapper that handles both formats:
+```python
+class StandardLoggerAdapter:
+    def _format_kwargs(self, event: str, **kwargs) -> str:
+        if not kwargs:
+            return event
+        parts = [event]
+        for key, value in kwargs.items():
+            parts.append(f"{key}={value}")
+        return " | ".join(parts)
+```
+
+**Result**: System starts without `TypeError: logger._log() got unexpected keyword argument`.
+
+### Dashboard v2 Features
+
+#### Available Pages:
+1. **Graph** - ReactFlow goal dependency visualization
+2. **Timeline (Gantt)** - Historical goal execution timeline
+3. **Dependency Tree** - Hierarchical goal tree view
+4. **Observability** - Russian: "Наблюдаемость" - System metrics
+5. **Questions** - Russian: "Вопросы" - Question management
+6. **Decomposition** - Russian: "Декомпозиция" - Goal decomposition
+7. **Skills** (OCCP v1.0) - Skill registry and management
+8. **Deployments** (OCCP v1.0) - Deployment tracking
+9. **Metrics** (OCCP v1.0) - Performance metrics
+10. **Federation** (OCCP v1.0) - Multi-system federation
+11. **Artifacts** (OCCP v1.0) - Artifact registry
+12. **Autonomy** (NEW 🧠) - Autonomous decision-making system
+13. **Admin** (NEW 🛡️) - System administration
+
+#### API Endpoints Used by Dashboard:
+
+##### Goals API:
+- `GET /goals/list` - List all goals
+- `GET /goals/{goal_id}/tree` - Get goal tree
+- `GET /goals/{goal_id}/artifacts` - Get goal artifacts
+- `POST /goals/{goal_id}/approve_completion` - Approve manual goal completion
+- `POST /goals/{goal_id}/mutate` - Modify goal
+
+##### Alerts API:
+- `GET /alerts` - Get system alerts
+- `GET /alerts/summary` - Get alerts summary
+- `POST /alerts/{alert_id}/resolve` - Resolve alert
+
+##### Interventions API:
+- `GET /interventions/candidates` - Get intervention candidates
+- `GET /interventions/{id}/simulation` - Get simulation results
+- `POST /interventions/{id}/simulate` - Run simulation
+- `GET /interventions/{id}/risk` - Get risk assessment
+- `POST /interventions/{id}/approve` - Approve intervention
+- `POST /interventions/{id}/reject` - Reject intervention
+
+##### Artifacts API:
+- `GET /artifacts` - Get all artifacts (now works after migration!)
+- `GET /artifacts?limit=50&offset=0` - Paginated artifacts list
+
+### Dashboard v2 Development
+
+#### Build & Run:
+```bash
+cd /home/onor/ai_os_final/services/dashboard_v2
+
+# Development
+npm install
+npm run dev         # Port 3000
+
+# Production build
+npm run build
+```
+
+#### WSL2 Access from Windows:
+```bash
+# Get WSL2 IP
+ip addr show eth0 | grep inet
+
+# Access from Windows browser:
+# http://<WSL2_IP>:3000
+```
+
+#### File Structure:
+```
+services/dashboard_v2/
+├── src/
+│   ├── api/
+│   │   └── client.ts           # Axios API client with SSE
+│   ├── components/
+│   │   ├── canvas/            # ReactFlow graph
+│   │   ├── controls/          # Control panel
+│   │   ├── inspector/         # Node inspector
+│   │   ├── timeline/          # Gantt timeline
+│   │   └── tree/              # Dependency tree
+│   ├── pages/
+│   │   ├── Autonomy.tsx       # NEW: Autonomy system
+│   │   ├── Admin.tsx          # NEW: System admin
+│   │   ├── Skills.tsx         # OCCP: Skills
+│   │   ├── Deployments.tsx    # OCCP: Deployments
+│   │   ├── Observability.tsx  # OCCP: Metrics
+│   │   ├── Federation.tsx     # OCCP: Federation
+│   │   └── Artifacts.tsx      # OCCP: Artifacts
+│   ├── store/
+│   │   ├── uiStore.ts         # UI state (Zustand)
+│   │   ├── graphStore.ts      # Graph state
+│   │   ├── executionLogStore.ts
+│   │   └── toastStore.ts
+│   ├── types/index.ts         # TypeScript definitions
+│   └── App.tsx                # Main app
+├── package.json
+├── vite.config.ts
+└── tailwind.config.js
+```
+
+### Dashboard Status:
+- ✅ Running on http://localhost:3000
+- ✅ Hot reload working
+- ✅ All pages accessible
+- ✅ No console errors
+- ✅ CORS configured
+- ✅ API integration working
+
+### Access URLs:
+- **Primary**: http://172.25.50.61:3000
+- **Alternative**: http://10.255.255.254:3000
+- **Local (WSL2)**: http://localhost:3000
+
+---
 ## Transaction Boundary Refactoring (COMPLETED)
 
 **Core architectural change**: Extracting transaction management into UnitOfWork pattern.

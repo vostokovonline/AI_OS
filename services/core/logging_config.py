@@ -108,6 +108,62 @@ def _setup_standard_logging(level: str, log_file: str | None) -> None:
     )
 
 
+class StandardLoggerAdapter:
+    """
+    Wrapper for standard logging.Logger that handles keyword arguments.
+    
+    Converts logger.info("event", key=value) to:
+    logger.info("event | key=value")
+    
+    This provides compatibility with structlog-style calls when structlog
+    is not available.
+    """
+    
+    def __init__(self, logger: logging.Logger):
+        self._logger = logger
+    
+    def _format_kwargs(self, event: str, **kwargs) -> str:
+        """Format event and kwargs into a single message string."""
+        if not kwargs:
+            return event
+        
+        parts = [event]
+        for key, value in kwargs.items():
+            # Format value based on type
+            if isinstance(value, str):
+                formatted_value = value
+            elif isinstance(value, (int, float, bool)):
+                formatted_value = str(value)
+            else:
+                formatted_value = repr(value)
+            
+            parts.append(f"{key}={formatted_value}")
+        
+        return " | ".join(parts)
+    
+    def debug(self, event: str, **kwargs) -> None:
+        self._logger.debug(self._format_kwargs(event, **kwargs))
+    
+    def info(self, event: str, **kwargs) -> None:
+        self._logger.info(self._format_kwargs(event, **kwargs))
+    
+    def warning(self, event: str, **kwargs) -> None:
+        self._logger.warning(self._format_kwargs(event, **kwargs))
+    
+    def error(self, event: str, exc_info=None, **kwargs) -> None:
+        if exc_info is not None:
+            self._logger.error(self._format_kwargs(event, **kwargs), exc_info=exc_info)
+        else:
+            self._logger.error(self._format_kwargs(event, **kwargs))
+    
+    def critical(self, event: str, **kwargs) -> None:
+        self._logger.critical(self._format_kwargs(event, **kwargs))
+    
+    # Pass through other logger attributes
+    def __getattr__(self, name):
+        return getattr(self._logger, name)
+
+
 def get_logger(name: str | None = None) -> Any:
     """
     Get a logger instance.
@@ -121,7 +177,8 @@ def get_logger(name: str | None = None) -> Any:
     if STRUCTLOG_AVAILABLE:
         return structlog.get_logger(name)
     else:
-        return logging.getLogger(name)
+        # Return wrapper that handles keyword args for standard logging
+        return StandardLoggerAdapter(logging.getLogger(name))
 
 
 # Convenience functions for common patterns
