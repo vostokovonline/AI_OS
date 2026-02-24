@@ -56,7 +56,7 @@ const Autonomy: React.FC = () => {
 
   const loadData = async () => {
     try {
-      // Load alerts summary
+      // Load alerts summary from backend
       const alertsResponse = await apiClient.get('/alerts/summary');
       setAlerts(alertsResponse.data.summary);
 
