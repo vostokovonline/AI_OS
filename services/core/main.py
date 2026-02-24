@@ -4104,46 +4104,45 @@ async def get_alerts(
         from models import SystemAlert
         from sqlalchemy import desc
 
-        db = get_db_sync()
+        async with AsyncSessionLocal() as db:
+            # Build query
+            stmt = select(SystemAlert)
 
-        # Build query
-        stmt = select(SystemAlert)
+            # Apply filters
+            if resolved is not None:
+                stmt = stmt.where(SystemAlert.resolved == resolved)
 
-        # Apply filters
-        if resolved is not None:
-            stmt = stmt.where(SystemAlert.resolved == resolved)
+            if alert_type:
+                stmt = stmt.where(SystemAlert.alert_type == alert_type)
 
-        if alert_type:
-            stmt = stmt.where(SystemAlert.alert_type == alert_type)
+            if severity:
+                stmt = stmt.where(SystemAlert.severity == severity)
 
-        if severity:
-            stmt = stmt.where(SystemAlert.severity == severity)
+            # Order and limit
+            stmt = stmt.order_by(desc(SystemAlert.created_at)).limit(limit)
 
-        # Order and limit
-        stmt = stmt.order_by(desc(SystemAlert.created_at)).limit(limit)
+            result = await db.execute(stmt)
+            alerts = result.scalars().all()
 
-        result = db.execute(stmt)
-        alerts = result.scalars().all()
-
-        # Convert to response
-        return {
-            "status": "ok",
-            "count": len(alerts),
-            "alerts": [
-                {
-                    "id": str(alert.id),
-                    "alert_type": alert.alert_type,
-                    "severity": alert.severity,
-                    "trigger_data": alert.trigger_data,
-                    "explanation": alert.explanation,
-                    "context": alert.context,
-                    "resolved": alert.resolved,
-                    "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
-                    "created_at": alert.created_at.isoformat()
-                }
-                for alert in alerts
-            ]
-        }
+            # Convert to response
+            return {
+                "status": "ok",
+                "count": len(alerts),
+                "alerts": [
+                    {
+                        "id": str(alert.id),
+                        "alert_type": alert.alert_type,
+                        "severity": alert.severity,
+                        "trigger_data": alert.trigger_data,
+                        "explanation": alert.explanation,
+                        "context": alert.context,
+                        "resolved": alert.resolved,
+                        "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
+                        "created_at": alert.created_at.isoformat()
+                    }
+                    for alert in alerts
+                ]
+            }
 
     except Exception as e:
         import traceback
@@ -4158,41 +4157,40 @@ async def get_alerts_summary():
         from models import SystemAlert
         from sqlalchemy import func
 
-        db = get_db_sync()
+        async with AsyncSessionLocal() as db:
+            # Active alerts
+            active_stmt = select(
+                SystemAlert.alert_type,
+                SystemAlert.severity,
+                func.count().label("count")
+            ).where(SystemAlert.resolved == False).group_by(
+                SystemAlert.alert_type,
+                SystemAlert.severity
+            )
 
-        # Active alerts
-        active_stmt = select(
-            SystemAlert.alert_type,
-            SystemAlert.severity,
-            func.count().label("count")
-        ).where(SystemAlert.resolved == False).group_by(
-            SystemAlert.alert_type,
-            SystemAlert.severity
-        )
+            result = await db.execute(active_stmt)
+            active_alerts = result.fetchall()
 
-        result = db.execute(active_stmt)
-        active_alerts = result.fetchall()
+            # Total counts
+            total_count = (await db.execute(select(func.count()).select_from(SystemAlert))).scalar() or 0
+            active_count = (await db.execute(select(func.count()).where(SystemAlert.resolved == False))).scalar() or 0
 
-        # Total counts
-        total_count = db.execute(select(func.count()).select_from(SystemAlert)).scalar() or 0
-        active_count = db.execute(select(func.count()).where(SystemAlert.resolved == False)).scalar() or 0
-
-        return {
-            "status": "ok",
-            "summary": {
-                "total_alerts": total_count,
-                "active_alerts": active_count,
-                "resolved_alerts": total_count - active_count
-            },
-            "active_by_type": [
-                {
-                    "alert_type": row[0],
-                    "severity": row[1],
-                    "count": row[2]
-                }
-                for row in active_alerts
-            ]
-        }
+            return {
+                "status": "ok",
+                "summary": {
+                    "total_alerts": total_count,
+                    "active_alerts": active_count,
+                    "resolved_alerts": total_count - active_count
+                },
+                "active_by_type": [
+                    {
+                        "alert_type": row[0],
+                        "severity": row[1],
+                        "count": row[2]
+                    }
+                    for row in active_alerts
+                ]
+            }
 
     except Exception as e:
         import traceback
@@ -4210,33 +4208,32 @@ async def resolve_alert(alert_id: str):
         from models import SystemAlert
         from sqlalchemy import select
 
-        db = get_db_sync()
+        async with AsyncSessionLocal() as db:
+            # Find alert
+            stmt = select(SystemAlert).where(SystemAlert.id == alert_id)
+            result = await db.execute(stmt)
+            alert = result.scalar_one_or_none()
 
-        # Find alert
-        stmt = select(SystemAlert).where(SystemAlert.id == alert_id)
-        result = db.execute(stmt)
-        alert = result.scalar_one_or_none()
+            if not alert:
+                raise HTTPException(status_code=404, detail="Alert not found")
 
-        if not alert:
-            raise HTTPException(status_code=404, detail="Alert not found")
+            # Mark as resolved
+            alert.resolved = True
+            alert.resolved_at = datetime.now()
 
-        # Mark as resolved
-        alert.resolved = True
-        alert.resolved_at = datetime.now()
+            await db.commit()
+            await db.refresh(alert)
 
-        db.commit()
-        db.refresh(alert)
-
-        return {
-            "status": "ok",
-            "message": "Alert marked as resolved",
-            "alert": {
-                "id": str(alert.id),
-                "alert_type": alert.alert_type,
-                "resolved": alert.resolved,
-                "resolved_at": alert.resolved_at.isoformat()
+            return {
+                "status": "ok",
+                "message": "Alert marked as resolved",
+                "alert": {
+                    "id": str(alert.id),
+                    "alert_type": alert.alert_type,
+                    "resolved": alert.resolved,
+                    "resolved_at": alert.resolved_at.isoformat()
+                }
             }
-        }
 
     except HTTPException:
         raise
