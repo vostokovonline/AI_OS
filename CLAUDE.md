@@ -396,6 +396,98 @@ services/dashboard_v2/
 - **Local (WSL2)**: http://localhost:3000
 
 ---
+
+## Belief Model v1.0 (COMPLETED - 2026-02-23)
+
+**Core architectural shift**: From penalty-based conflict handling to belief-based epistemic model.
+
+**Key principle**: Status is COMPUTED from evidence, not stored. Knowledge is a distribution of support, not binary.
+
+### Core Formula
+
+```
+P(True) = support_true / (support_true + support_false)
+P(False) = support_false / (support_true + support_false)
+uncertainty = 1 - max(support) / total_support
+```
+
+### Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| BeliefState | `autonomy/beliefs.py` | Epistemic state per predicate |
+| WorldBeliefState | `autonomy/beliefs.py` | Aggregated world view |
+| BeliefStateBuilder | `autonomy/beliefs.py` | Converts propositions → beliefs |
+| PropositionStore | `autonomy/propositions.py` | Thread-safe proposition storage |
+| CompletionEngine | `autonomy/completion_engine.py` | v2.4 BeliefState-based evaluation |
+
+### Architecture
+
+```
+Artifacts → Propositions → BeliefStateBuilder → WorldBeliefState → Goal Evaluation
+                ↓
+        PropositionStore (thread-safe with RLock)
+```
+
+### Parameters
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| min_support_threshold | 0.3 | Filters noise (weak signals don't overwhelm strong) |
+| Aggregation: ALL | product(P_i) | Conjunction semantics |
+| Aggregation: ANY | max(P_i) | Disjunction semantics |
+| Aggregation: AVERAGE | mean(P_i) | Balanced view |
+
+### Stability Guarantees (Stress-Tested)
+
+- ✅ Massive conflict (100+ signals): Converges to proportional split
+- ✅ Noise robustness: Weak signals (≤0.3) filtered
+- ✅ Partial information: Uncertainty → 1.0 as evidence → 0
+- ✅ Accumulation: Confidence → 1.0 with consistent evidence
+- ✅ Independence: Predicates do not interfere
+- ✅ Thread-safety: RLock protects all store operations (3000 concurrent writes, 0 inconsistencies)
+
+### Critical Constraints
+
+1. **WorldBeliefState is the ONLY source of truth** - CompletionEngine never sees raw propositions
+2. **NO conflict penalty** - Conflict is built into probability distribution
+3. **BeliefStateBuilder filters noise** with min_support_threshold
+4. **Goal evaluation uses aggregate_confidence() only**
+
+### Assumptions (by design)
+
+- Evidence is additive (confidence values sum linearly)
+- Predicates are independent
+- Binary values only (True/False)
+- No temporal decay (all evidence equally weighted)
+- No source trust (all propositions weighted equally)
+
+### Limitations (by design)
+
+- No source weighting
+- No temporal decay
+- No multi-valued predicates
+- No hierarchical belief composition
+
+### Test Coverage
+
+| Test | Status | File |
+|------|--------|------|
+| Basic BeliefState | ✅ PASS | `test_belief_state.py` |
+| Integration | ✅ PASS | `test_belief_integration.py` |
+| Stress (5 scenarios) | ✅ PASS | `test_belief_stress.py` |
+| Concurrency | ✅ PASS | `test_belief_concurrency.py` |
+
+### API Endpoints
+
+```
+GET /completion/evaluate/{goal_id}     # BeliefState-based evaluation
+GET /completion/sync/{goal_id}         # Sync cached status
+GET /completion/propositions/{goal_id} # Get propositions
+GET /completion/info                   # Engine info
+```
+
+---
 ## Transaction Boundary Refactoring (COMPLETED)
 
 **Core architectural change**: Extracting transaction management into UnitOfWork pattern.
@@ -1615,3 +1707,156 @@ make status
 - **Temporal.io** - Optional: Long-running workflow orchestration
 - **Neo4j** - Graph database for memory relationships
 - **Milvus** - Vector database for semantic search
+
+---
+
+## Decision Engine Architecture v4.0 (2026-03-01)
+
+**Goal**: Production-grade decision system with arbitration, regret analysis, and safe auto-tuning.
+
+### Core Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Two-Phase UseCase | `application/use_cases/decompose_activated_goals.py` | Decompose → Execute |
+| Event Bus | `application/events/bus.py` | Event-driven communication |
+| Domain Intents | `application/domain_intents.py` | GoalSnapshot, DecompositionDecision |
+| Bulk Engine | `application/bulk_engine.py` | "Dumb applier" - atomic execution |
+| Decision Policies | `application/policies/decision_policies.py` | PassThrough, GreedyUtility, UtilityCostAware |
+| Arbitration Trace | `application/policies/arbitration_trace.py` | Per-cycle decision logging |
+| Decision Feedback | `application/policies/decision_feedback.py` | Regret analysis |
+| Regret Tuner | `application/policies/regret_tuner.py` | Policy recommendations |
+| Safe Auto-Tuner | `application/policies/safe_auto_tuner.py` | Safe adaptation with safeguards |
+
+### Architecture
+
+```
+Goals → UseCase → ExecutionIntents → Arbitration → Policy Selection → BulkEngine → DB
+                                    ↓
+                           ArbitrationTrace
+                                    ↓
+                           DecisionFeedback → SafeAutoTuner
+```
+
+### Decision Policies
+
+```python
+# PassThrough - no filtering
+policy = PassThroughPolicy()
+
+# GreedyUtility - select by utility DESC
+policy = GreedyUtilityPolicy()
+
+# UtilityCostAware - threshold-based
+policy = UtilityCostAwarePolicy(min_utility=0.3, max_cost=0.7)
+```
+
+### SafeAutoTuner Safeguards
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| min_cycles_for_analysis | 5 | Wait for enough data |
+| max_step_size | 2 | Gradual changes only |
+| min_regret_threshold | 0.3 | Only tune when needed |
+
+### API Endpoints
+
+```
+GET /completion/evaluate/{goal_id}     # BeliefState-based evaluation
+GET /completion/sync/{goal_id}         # Sync cached status
+GET /completion/propositions/{goal_id} # Get propositions
+GET /completion/info                   # Engine info
+```
+
+---
+
+## Testing Infrastructure (2026-03-01)
+
+### Test Files
+
+```
+tests/
+├── simulator.py                           # System simulation
+├── unit/
+│   └── test_policies/
+│       ├── test_runner.py                 # SafeAutoTuner unit tests (8 tests)
+│       └── test_safe_auto_tuner.py        # Full policy tests
+└── integration/
+    ├── test_goal_execution_pipeline.py    # Integration tests (5 tests)
+    ├── test_goal_execution_pipeline_e2e.py # E2E tests (3 tests)
+    ├── test_goal_execution_pipeline_full_e2e.py # Full E2E (5 tests)
+    ├── test_true_e2e.py                   # True E2E with DB (5 tests)
+    └── test_atomic_hard.py               # Atomic hard tests (4 tests)
+```
+
+### Running Tests
+
+```bash
+# Unit tests
+docker exec ns_core python /app/tests/unit/test_policies/test_runner.py
+
+# Integration tests
+docker exec ns_core python /app/tests/integration/test_goal_execution_pipeline.py
+
+# E2E tests
+docker exec ns_core python /app/tests/integration/test_goal_execution_pipeline_e2e.py
+
+# Production E2E
+docker exec ns_core python /app/tests/integration/test_production_e2e.py
+
+# Atomic Hard Tests
+docker exec ns_core python /app/tests/integration/test_atomic_hard.py
+
+# Simulator
+docker exec ns_core python /app/tests/simulator.py
+```
+
+### Test Results (2026-03-01)
+
+| Test Suite | Status | Tests |
+|------------|--------|-------|
+| SafeAutoTuner Unit | ✅ | 8 passed |
+| Integration | ✅ | 5 passed |
+| E2E | ✅ | 3 passed |
+| Production E2E | ✅ | 5 passed |
+| Atomic Hard | ✅ | 4 passed |
+
+### Verified Behaviors
+
+| Behavior | Status | Notes |
+|----------|--------|-------|
+| WriteBarrier | ✅ Verified | Blocks writes before allow() |
+| Transaction Atomicity | ✅ Verified | Rollback works in PostgreSQL |
+| UoW Commit | ✅ Verified | Goals created and persisted |
+| Policy Selection | ✅ Verified | PassThrough, GreedyUtility, UtilityCostAware |
+| SafeAutoTuner | ✅ Verified | Budget adapts based on regret |
+| Atomic Batch | ⚠️ Partial | Continues with partial (business decision needed) |
+
+### Known Limitations
+
+1. **ExecuteReadyGoalsUseCase API** - Has internal Logger issue
+2. **Batch Atomicity** - Currently best-effort, not full rollback
+3. **Event Subscription** - Structure verified, full E2E flow pending
+
+---
+
+## Next Steps (Production Readiness)
+
+### Priority 1: Fix Known Issues
+- Fix ExecuteReadyGoalsUseCase Logger error
+- Define batch atomicity strategy (rollback-all vs partial)
+
+### Priority 2: Stress Testing
+- 10k intents throughput test
+- 100 cycles latency measurement
+- Memory growth monitoring
+
+### Priority 3: Concurrency Testing
+- Parallel transitions
+- Double execution prevention
+- Race condition handling
+
+### Priority 4: Failure Testing
+- Kill mid-commit simulation
+- Network partition handling
+- Partial failure recovery
