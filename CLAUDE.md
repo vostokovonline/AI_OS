@@ -1860,3 +1860,74 @@ docker exec ns_core python /app/tests/simulator.py
 - Kill mid-commit simulation
 - Network partition handling
 - Partial failure recovery
+
+
+---
+
+## Control Plane v1.0 (2026-03-02)
+
+**Status**: Production-ready Adaptive Economic Router for LLM selection.
+
+### Core Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Decision Trace | `decision_trace_endpoints.py` | Model selection with full audit |
+| Goal Weights | `GOAL_TYPE_WEIGHTS` | Task-specific scoring weights |
+| Confidence Penalty | `sample_confidence` | Prevents low-sample decisions |
+| Fallback Chain | LiteLLM config | qwen2.5 → deepseek → minimax |
+
+### Scoring Formula
+
+```
+adjusted_score = combined_score × confidence
+
+combined_score = success × w_success + cost × w_cost + latency × w_latency
+```
+
+### Goal-Type Weights (v1.0)
+
+| Goal Type | Success | Latency | Cost |
+|----------|---------|---------|------|
+| precise_reasoning | 0.6 | 0.2 | 0.2 |
+| cheap_generation | 0.2 | 0.5 | 0.3 |
+| creative_writing | 0.7 | 0.15 | 0.15 |
+| long_context | 0.5 | 0.25 | 0.25 |
+
+### Fallback Chain
+
+```
+qwen2.5-coder:latest (primary) → deepseek-v3.1:671b-cloud (backup) → minimax-m2:cloud (light fallback)
+```
+
+### API Endpoints
+
+```
+GET /llm/control/decision/trace?goal_type=precise_reasoning
+GET /llm/control/recommend-model?goal_type=cheap_generation
+```
+
+### Guardrails
+
+- [x] Weight validation at startup (sum = 1.0)
+- [x] Confidence penalty (MIN_SAMPLE=10, TARGET=50)
+- [x] Supported goal types frozen set
+- [x] Fallback always available
+
+### Test Files
+
+```
+tests/validation/
+├── test_routing_profiles.py     # Goal-type routing
+├── test_rate_limit.py          # Rate limit detection
+├── test_fallback_chain.py      # Fallback validation
+└── collect_metrics.py         # Metrics collection
+```
+
+### Production Models (Ollama)
+
+| Model | Type | Latency | Use Case |
+|-------|------|---------|----------|
+| qwen2.5-coder:latest | LOCAL | ~1.5s | Primary |
+| deepseek-v3.1:671b-cloud | CLOUD | ~1-2s | Reasoning backup |
+| minimax-m2:cloud | CLOUD | ~0.5s | Light fallback |

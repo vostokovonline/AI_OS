@@ -124,7 +124,7 @@ class GoalDomainService:
             self._validate_type_specific_rules(goal_type, new_state_str)
         
         # Валидация: разрешённые переходы
-        self._validate_allowed_transition(old_state_str, new_state_str)
+        self._validate_allowed_transition(old_state_str, new_state_str, goal)
         
         # Разрешаем изменение _status (обходим защиту)
         self._enable_transition()
@@ -164,7 +164,7 @@ class GoalDomainService:
                 "Use 'permanent' instead."
             )
     
-    def _validate_allowed_transition(self, from_state: str, to_state: str):
+    def _validate_allowed_transition(self, from_state: str, to_state: str, goal=None):
         """Проверка что переход между данными состояниями разрешён"""
         # Словарь разрешённых переходов
         allowed_transitions = {
@@ -191,14 +191,22 @@ class GoalDomainService:
                 GoalState.DONE.value,  # rare, but possible
             },
         }
-        
+
         allowed = allowed_transitions.get(from_state, set())
         if to_state not in allowed:
             # Исключения для специфичных случаев
             if from_state == GoalState.INCOMPLETE.value and to_state == GoalState.DONE.value:
                 # Можно перейти в done из incomplete если артефакты добавлены
                 return
-            
+
+            # TEMPORARY: Allow atomic goals to go from pending → done directly
+            # This bypasses the normal pending → active → done flow
+            # TODO: Revisit this architectural decision
+            if (goal and getattr(goal, 'is_atomic', False) and
+                from_state == GoalState.PENDING.value and
+                to_state == GoalState.DONE.value):
+                return
+
             raise ValueError(
                 f"Invalid transition: cannot go from '{from_state}' to '{to_state}'. "
                 f"Allowed from '{from_state}': {allowed or 'none'}"
