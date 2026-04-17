@@ -1,8 +1,4 @@
-# Environment variables (SECRETS)
-.env
-.env.local
-.env.*.local
-
+```
 # Python
 __pycache__/
 *.py[cod]
@@ -25,68 +21,31 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nosetests
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+.env.*
+.venv/
 venv/
 ENV/
-env/
-.venv
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.DS_Store
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-postgres_data/
-neo4j_data/
-milvus_data/
-minio_data/
-
-# Logs
-*.log
-logs/
-*.log.*
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Docker volumes
-infra/
-!infra/*.yaml
-!infra/*.yml
-!infra/*.conf
-
-# Temporary files
 *.tmp
-*.bak
-*.swp
-tmp/
-temp/
 
 # OS
-Thumbs.db
 .DS_Store
-
-# Secrets (explicit)
-secrets/
-*.pem
-*.key
-*.cert
-
-# Data directories
-data/
-artifacts/
-!data/.gitkeep
-
-# Submodules with their own git
-skills/.git
-services/core/skills/.git
+Thumbs.db
+```
