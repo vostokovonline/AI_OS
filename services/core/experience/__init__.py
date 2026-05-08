@@ -70,6 +70,13 @@ from experience.learning_event import (
     EventType,
     PolicyVersion
 )
+from experience.skill_registry import (
+    SkillRegistry,
+    ResolvedSkill,
+    get_skill_registry,
+    resolve_skill,
+    SkillRegistryError
+)
 from experience.shadow_evaluator import (
     ShadowEvaluator,
     get_shadow_evaluator
@@ -118,4 +125,11 @@ __all__ = [
     "LearningEventStore",
     "SCHEMA_VERSION",
     "EventType",
+    
+    # Skill registry
+    "SkillRegistry",
+    "ResolvedSkill",
+    "get_skill_registry",
+    "resolve_skill",
+    "SkillRegistryError",
 ]

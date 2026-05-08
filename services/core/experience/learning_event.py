@@ -9,7 +9,7 @@ Canonical format for all learning data:
 
 Schema version: v3
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -60,6 +60,12 @@ class LearningEvent:
     latency_ms: int = 0
     error: Optional[str] = None
     
+    # Reward decomposition (for rich learning signal)
+    reward_success: float = 0.0      # Base success reward
+    reward_latency: float = 0.0       # Latency penalty
+    reward_quality: float = 0.0       # Artifact quality bonus
+    reward_penalty: float = 0.0      # Error/retry penalties
+    
     # Learning metrics
     regret: float = 0.0
     policy_version: str = "legacy_v1"
@@ -85,7 +91,12 @@ class LearningEvent:
             "error": self.error,
             "regret": round(self.regret, 3),
             "policy_version": self.policy_version,
-            "schema_version": self.schema_version
+            "schema_version": self.schema_version,
+            # Reward decomposition
+            "reward_success": round(self.reward_success, 3),
+            "reward_latency": round(self.reward_latency, 3),
+            "reward_quality": round(self.reward_quality, 3),
+            "reward_penalty": round(self.reward_penalty, 3)
         }
 
 
@@ -101,20 +112,20 @@ class LearningEventStore:
         self.store_dir.mkdir(exist_ok=True, parents=True)
     
     def append(self, event: LearningEvent) -> str:
-        """Append event to store, return event_id"""
+        """Append event to store, return event_id - uses replace() for immutability"""
         import uuid
         import json
         
+        # Generate event_id if not set (using replace for frozen dataclass)
         event_id = event.event_id or str(uuid.uuid4())[:8]
         
-        # Create a copy with the event_id set
-        event_dict = event.to_dict()
-        event_dict["event_id"] = event_id
+        # Create new event with event_id using replace() (immutable)
+        final_event = replace(event, event_id=event_id, timestamp=event.timestamp or datetime.utcnow().isoformat())
         
-        filename = self.store_dir / f"{event.event_type}_{event_id}.json"
+        filename = self.store_dir / f"{final_event.event_type}_{event_id}.json"
         
         with open(filename, "w") as f:
-            json.dump(event_dict, f, indent=2)
+            json.dump(final_event.to_dict(), f, indent=2)
         
         return event_id
     

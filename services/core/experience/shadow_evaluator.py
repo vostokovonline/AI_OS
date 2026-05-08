@@ -166,7 +166,13 @@ class ShadowEvaluator:
         success: bool,
         regret: float
     ) -> str:
-        """Create immutable LearningEvent from execution outcome"""
+        """Create immutable LearningEvent from execution outcome with reward decomposition"""
+        
+        # Calculate reward components
+        reward_success = 1.0 if success else -1.0
+        reward_latency = -min(latency_ms / 30000, 0.3)  # Max 0.3 penalty at 30s
+        reward_quality = 0.1 if success and evaluation.get("artifacts_count", 0) > 0 else 0.0
+        reward_penalty = -0.2 if not success else 0.0
         
         event = LearningEvent(
             event_type="skill_execution",
@@ -183,7 +189,11 @@ class ShadowEvaluator:
             success=success,
             latency_ms=latency_ms,
             regret=regret,
-            policy_version="thompson_v1"
+            policy_version="thompson_v1",
+            reward_success=round(reward_success, 3),
+            reward_latency=round(reward_latency, 3),
+            reward_quality=round(reward_quality, 3),
+            reward_penalty=round(reward_penalty, 3)
         )
         
         # Store event
