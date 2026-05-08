@@ -47,7 +47,29 @@ from experience.environment_context import (
     clear_all_conditions
 )
 
+# New bandit learning components
+from experience.trajectory_dataset import (
+    TRACE_SCHEMA_VERSION,
+    TraceContext,
+    TraceSchemaValidator,
+    LearningSample
+)
+from experience.dataset_extractor import (
+    TrajectoryDatasetExtractor,
+    RewardNormalizer
+)
+from experience.thompson_sampling import (
+    ThompsonSamplingBandit,
+    get_bandit,
+    SkillArm
+)
+from experience.shadow_evaluator import (
+    ShadowEvaluator,
+    get_shadow_evaluator
+)
+
 __all__ = [
+    # Existing
     "Experience",
     "SkillStats",
     "ExperienceEngine",
@@ -70,4 +92,17 @@ __all__ = [
     "inject_rate_limit",
     "inject_network_issue",
     "clear_all_conditions",
+    
+    # New bandit learning
+    "TRACE_SCHEMA_VERSION",
+    "TraceContext",
+    "TraceSchemaValidator",
+    "LearningSample",
+    "TrajectoryDatasetExtractor",
+    "RewardNormalizer",
+    "ThompsonSamplingBandit",
+    "get_bandit",
+    "SkillArm",
+    "ShadowEvaluator",
+    "get_shadow_evaluator",
 ]

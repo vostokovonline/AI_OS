@@ -1,0 +1,30 @@
+{
+  "arms": {
+    "unknown": {
+      "alpha": 1.0,
+      "beta": 5.0,
+      "total_pulls": 4
+    },
+    "null": {
+      "alpha": 1.0,
+      "beta": 2.0,
+      "total_pulls": 1
+    },
+    "core.echo": {
+      "alpha": 1.0,
+      "beta": 1.0,
+      "total_pulls": 0
+    },
+    "core.write_file": {
+      "alpha": 1.0,
+      "beta": 1.8,
+      "total_pulls": 1
+    },
+    "core.web_research": {
+      "alpha": 1.0,
+      "beta": 1.0,
+      "total_pulls": 0
+    }
+  },
+  "selection_count": 1
+}
