@@ -11,9 +11,9 @@
       "total_pulls": 1
     },
     "core.echo": {
-      "alpha": 1.0,
+      "alpha": 2.9000000000000004,
       "beta": 1.0,
-      "total_pulls": 0
+      "total_pulls": 3
     },
     "core.write_file": {
       "alpha": 1.0,

@@ -63,6 +63,13 @@ from experience.thompson_sampling import (
     get_bandit,
     SkillArm
 )
+from experience.learning_event import (
+    LearningEvent,
+    LearningEventStore,
+    SCHEMA_VERSION,
+    EventType,
+    PolicyVersion
+)
 from experience.shadow_evaluator import (
     ShadowEvaluator,
     get_shadow_evaluator
@@ -105,4 +112,10 @@ __all__ = [
     "SkillArm",
     "ShadowEvaluator",
     "get_shadow_evaluator",
+    
+    # Learning events
+    "LearningEvent",
+    "LearningEventStore",
+    "SCHEMA_VERSION",
+    "EventType",
 ]

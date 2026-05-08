@@ -1,23 +1,23 @@
 """
-Shadow Mode Evaluator - Compares bandit vs legacy selection without execution
+Shadow Mode Evaluator - Creates LearningEvents from execution outcomes
 
-Logs:
-{
-  "legacy_choice": "core.echo",
-  "bandit_choice": "core.write_file", 
-  "observed_reward": -1.0,
-  "regret": 0.5
-}
+Every skill execution creates:
+- Executed arm (what actually ran)
+- Shadow arm (what bandit would have picked)
+- Observed reward
+- Regret metric
 
-Does NOT affect actual execution - purely observational.
+These become LearningEvents for replay and policy updates.
 """
 import json
+import uuid
 from typing import Dict, List, Optional
 from pathlib import Path
 from datetime import datetime
 
 from .thompson_sampling import ThompsonSamplingBandit, get_bandit
 from .trajectory_dataset import LearningSample
+from .learning_event import LearningEvent, LearningEventStore
 
 
 class ShadowEvaluator:
@@ -138,6 +138,15 @@ class ShadowEvaluator:
         else:
             print(f"[SHADOW_EVAL] Skipped update - invalid legacy_choice: {legacy_choice}", flush=True)
         
+        # Create LearningEvent for immutable storage
+        self._create_learning_event(
+            evaluation=evaluation,
+            reward=reward,
+            latency_ms=latency_ms,
+            success=success,
+            regret=regret
+        )
+        
         # Log updated evaluation
         self._log_evaluation(evaluation)
         
@@ -148,6 +157,42 @@ class ShadowEvaluator:
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.log_file, "a") as f:
             f.write(json.dumps(evaluation) + "\n")
+    
+    def _create_learning_event(
+        self,
+        evaluation: Dict,
+        reward: float,
+        latency_ms: int,
+        success: bool,
+        regret: float
+    ) -> str:
+        """Create immutable LearningEvent from execution outcome"""
+        
+        event = LearningEvent(
+            event_type="skill_execution",
+            trace_id=evaluation.get("trace_id", ""),
+            event_id=uuid.uuid4().hex[:8],
+            timestamp=datetime.utcnow().isoformat(),
+            context_features=evaluation.get("context", {}),
+            goal_type=evaluation.get("context", {}).get("goal_type", ""),
+            domain=evaluation.get("context", {}).get("domain", ""),
+            candidates=evaluation.get("candidates", []),
+            executed_arm=evaluation.get("legacy_choice", ""),
+            shadow_arm=evaluation.get("bandit_choice", ""),
+            reward=reward,
+            success=success,
+            latency_ms=latency_ms,
+            regret=regret,
+            policy_version="thompson_v1"
+        )
+        
+        # Store event
+        event_store = LearningEventStore()
+        event_id = event_store.append(event)
+        
+        print(f"[LEARNING_EVENT] Created event {event_id} reward={reward} regret={regret}", flush=True)
+        
+        return event_id
     
     def get_statistics(self) -> Dict:
         """
