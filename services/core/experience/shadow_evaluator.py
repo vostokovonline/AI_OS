@@ -114,8 +114,9 @@ class ShadowEvaluator:
             Updated evaluation with regret
         """
         # Calculate regret: expected_best - actual
-        # Expected best is bandit choice's mean reward
+        # Expected best is bandit choice's mean reward (hypothetical)
         bandit_choice = evaluation.get("bandit_choice")
+        legacy_choice = evaluation.get("legacy_choice")
         arm_stats = evaluation.get("arm_stats", {})
         expected_best = arm_stats.get("mean", 0.5) if arm_stats else 0.5
         
@@ -129,8 +130,13 @@ class ShadowEvaluator:
         evaluation["success"] = success
         evaluation["phase"] = "completed"
         
-        # Update bandit with observed reward
-        self.bandit.update(bandit_choice, reward)
+        # CRITICAL: Update ONLY legacy executed arm (not hypothetical bandit choice)
+        # Bandit choice was NOT executed, so we cannot learn from it
+        if legacy_choice and legacy_choice != "unknown" and legacy_choice is not None:
+            self.bandit.update(legacy_choice, reward)
+            print(f"[SHADOW_EVAL] Updated legacy arm: {legacy_choice} with reward={reward}", flush=True)
+        else:
+            print(f"[SHADOW_EVAL] Skipped update - invalid legacy_choice: {legacy_choice}", flush=True)
         
         # Log updated evaluation
         self._log_evaluation(evaluation)

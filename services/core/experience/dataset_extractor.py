@@ -123,10 +123,22 @@ class TrajectoryDatasetExtractor:
                 # If only one choice, use legacy as the chosen one
                 candidates = [trace.get("legacy_choice", "unknown")]
             
-            # Determine chosen skill
-            chosen_skill = trace.get("legacy_choice", "unknown")
+            # Determine chosen skill - MUST be valid
+            legacy_choice = trace.get("legacy_choice")
+            chosen_skill = legacy_choice
+            
+            # HARD validation: reject traces without valid skill
+            if not chosen_skill or chosen_skill in ["unknown", "None", None] or (isinstance(chosen_skill, str) and chosen_skill.strip() == ""):
+                print(f"[DATASET_EXTRACTOR] REJECTED trace {trace.get('trace_id')} - invalid skill: {chosen_skill}", flush=True)
+                return None
+            
             if not chosen_skill and candidates:
                 chosen_skill = candidates[0]
+            
+            # Second validation pass
+            if not chosen_skill or chosen_skill in ["unknown", "None"] or (isinstance(chosen_skill, str) and "unknown" in chosen_skill.lower()):
+                print(f"[DATASET_EXTRACTOR] REJECTED trace {trace.get('trace_id')} - no valid skill after fallback", flush=True)
+                return None
             
             # Calculate normalized reward
             reward = RewardNormalizer.normalize(
