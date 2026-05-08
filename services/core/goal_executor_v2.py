@@ -320,13 +320,50 @@ class GoalExecutorV2:
 
         # Use class-level constants, with override support for max_attempts
         max_attempts = max_attempts_override if max_attempts_override is not None else self.MAX_ATTEMPTS_DEFAULT
-
+        
+        print(f"[EXEC_GOAL] START goal_id={goal_id[:8]} max_attempts={max_attempts}", flush=True)
+        
         trace = {
             "goal_id": goal_id,
             "started_at": datetime.utcnow().isoformat(),
             "steps": [],
             "attempts": []
         }
+
+        # =================================================================
+        # LIFECYCLE-SAFE TRACING - Top level guarantee
+        # =================================================================
+        trace_id = None
+        goal_type_for_trace = "unknown"
+        
+        try:
+            from goal_harness.decision_trace_logger import log_decision_start, synthesize_context
+            
+            # PHASE 1: Get goal type for trace context
+            goal = await self._repo.get(uow.session, UUID(goal_id))
+            if goal:
+                goal_type_for_trace = goal.goal_type or "unknown"
+            
+            # Start lifecycle trace
+            context = synthesize_context(
+                goal_type=goal_type_for_trace,
+                goal_length=len(goal.description) if goal and goal.description else 0,
+                domain=goal.domains[0] if goal and goal.domains else "unknown"
+            )
+            trace_id = log_decision_start(
+                goal_id=goal_id,
+                goal_type=goal_type_for_trace,
+                task_type="atomic_execution",
+                candidates=[],
+                legacy_choice=None,
+                legacy_q_values=None,
+                phase="execution",
+                context=context
+            )
+            print(f"[TRACE_LIFECYCLE] Started trace_id={trace_id}", flush=True)
+            
+        except Exception as trace_err:
+            print(f"[TRACE_LIFECYCLE] Failed to start trace: {trace_err}", flush=True)
 
         # =================================================================
         # PHASE 1: READ - Get goal snapshot (uses caller's transaction)
@@ -518,6 +555,39 @@ class GoalExecutorV2:
             ))
         except Exception as e:
             logger.warning(f"Failed to emit GoalEvaluated: {e}")
+
+        # =================================================================
+        # LIFECYCLE-SAFE TRACING - Guaranteed completion via finally
+        # =================================================================
+        # Define outcome variables early so they're available in finally
+        final_status = "failed"
+        final_confidence = 0.0
+        final_artifacts_count = 0
+        
+        # Normal completion path
+        final_status = status
+        final_confidence = evaluation.confidence if evaluation else 0.0
+        final_artifacts_count = len(artifacts_data) if artifacts_data else 0
+        
+        # Complete trace on success path
+        if trace_id:
+            try:
+                from goal_harness.decision_trace_logger import log_decision_complete
+                success = final_status == "completed"
+                raw_reward = 1.0 if success else -1.0
+                log_decision_complete(
+                    trace_id=trace_id,
+                    success=success,
+                    raw_reward=raw_reward,
+                    confidence=final_confidence,
+                    latency_ms=0,
+                    skill_id=None,
+                    artifacts_count=final_artifacts_count,
+                    phase="execution"
+                )
+                print(f"[TRACE_LIFECYCLE] Completed trace_id={trace_id} success={success}", flush=True)
+            except Exception as complete_err:
+                print(f"[TRACE_LIFECYCLE] Failed to complete trace: {complete_err}", flush=True)
 
         # Return pure outcome - NO side effects
         return ExecutionOutcome(
@@ -2140,7 +2210,36 @@ class GoalExecutorV2:
 
         All operations use the passed UoW - NO internal commit/rollback.
         """
+        import inspect
+        print(f"[RUNTIME_FINGERPRINT] file={__file__} line=2213 module={__name__}", flush=True)
         print(f"[EXEC_FLOW] atomic_goal_execution_started goal_id={str(goal.id)[:8]} is_atomic={goal.is_atomic}", flush=True)
+
+        # =================================================================
+        # LIFECYCLE-SAFE TRACING (for execute_goal_with_uow path)
+        # =================================================================
+        trace_id = None
+        try:
+            from goal_harness.decision_trace_logger import log_decision_start, synthesize_context, log_decision_complete
+            
+            goal_type_for_trace = goal.goal_type or "unknown"
+            context = synthesize_context(
+                goal_type=goal_type_for_trace,
+                goal_length=len(goal.description) if goal.description else 0,
+                domain=goal.domains[0] if goal.domains else "unknown"
+            )
+            trace_id = log_decision_start(
+                goal_id=str(goal.id),
+                goal_type=goal_type_for_trace,
+                task_type="atomic_execution_uow",
+                candidates=[],
+                legacy_choice=None,
+                legacy_q_values=None,
+                phase="execution_uow",
+                context=context
+            )
+            print(f"[TRACE_LIFECYCLE_UOW] Started trace_id={trace_id}", flush=True)
+        except Exception as trace_err:
+            print(f"[TRACE_LIFECYCLE_UOW] Failed to start trace: {trace_err}", flush=True)
 
         # Start execution trace
         from datetime import datetime
@@ -2170,6 +2269,10 @@ class GoalExecutorV2:
         # Capture execution engine (v3 vs legacy)
         # This is passed from caller, defaults to legacy if not specified
         execution_engine = getattr(goal, '_execution_engine', None)
+        
+        # Safe defaults for variables used in exception handlers
+        skill_id_normalized = "unknown"
+        registered_artifacts = []
 
         try:
             # Create goal_snapshot for skill selection
@@ -2248,8 +2351,34 @@ class GoalExecutorV2:
             
             trace["pipeline_mode"] = False
 
-            # Record skill selection in trace
+            # MANDATORY TRACE: Single skill path - THIS IS THE HOT PATH!
+            from goal_harness.decision_trace_logger import log_decision_start, log_decision_complete, synthesize_context
+            
+            candidates_list = [normalize_skill_id(s) for s in [skill]]
+            goal_desc = (goal.title or "") + " " + (goal.description or "")
+            context = synthesize_context(
+                goal_type=goal.goal_type or "achievable",
+                goal_description=goal_desc,
+                candidates=candidates_list,
+                planner_depth=0,
+                retry_count=0
+            )
+            
+            trace_id = log_decision_start(
+                goal_id=str(goal.id),
+                goal_type=goal.goal_type or "achievable",
+                task_type="single_skill",
+                candidates=candidates_list,
+                legacy_choice=skill_id_normalized,
+                legacy_q_values=None,
+                phase="shadow",
+                context=context
+            )
+            # Initialize skill_id BEFORE using it
             skill_id_normalized = normalize_skill_id(skill)
+            print(f"[TRACE_SINGLE_SKILL] trace_id={trace_id} skill={skill_id_normalized}", flush=True)
+            
+            # Record skill selection in trace
             trace["steps"].append({
                 "step": "skill_selection",
                 "success": True,
@@ -2332,6 +2461,7 @@ class GoalExecutorV2:
             )
             attempt_reward_normalized = normalize_for_gaussian(attempt_reward)
             log_attempt(
+                trace_id=trace_id,
                 skill_id=skill_id_normalized,
                 attempt_num=1,  # Pipeline mode has single attempt
                 success=result.success,
@@ -2400,6 +2530,7 @@ class GoalExecutorV2:
                 )
                 logger.error("TRACE_WRITE_POINT", skill=skill_id_normalized, success=result.success, reward=raw_reward)
                 log_decision_complete(
+                    trace_id=trace_id,
                     success=result.success,
                     latency_ms=float(duration_ms),
                     raw_reward=raw_reward
@@ -2819,6 +2950,20 @@ class GoalExecutorV2:
                         artifact_with_preview["content_preview"] = None
                 artifacts_with_preview.append(artifact_with_preview)
 
+            # MANDATORY TRACE: Complete trace for single skill execution
+            from goal_harness.decision_trace_logger import log_decision_complete
+            success = evaluation_result.passed
+            latency = execution_rec.duration_ms if hasattr(execution_rec, 'duration_ms') else 0
+            raw_reward = 1.0 if success else -1.0
+            
+            log_decision_complete(
+                trace_id=trace_id,
+                success=success,
+                latency_ms=float(latency),
+                raw_reward=raw_reward
+            )
+            print(f"[TRACE_COMPLETE] trace_id={trace_id} success={success}", flush=True)
+
             return {
                 "status": "success",
                 "goal_id": str(goal.id),
@@ -2833,8 +2978,49 @@ class GoalExecutorV2:
                 "trace": trace
             }
 
+            # =================================================================
+            # LIFECYCLE-SAFE TRACING - Complete on success
+            # =================================================================
+            if trace_id:
+                try:
+                    from goal_harness.decision_trace_logger import log_decision_complete
+                    log_decision_complete(
+                        trace_id=trace_id,
+                        success=True,
+                        raw_reward=1.0,
+                        confidence=evaluation_result.confidence,
+                        latency_ms=execution_rec.duration_ms,
+                        skill_id=skill_id_normalized,
+                        artifacts_count=len(registered_artifacts),
+                        phase="execution_uow"
+                    )
+                    print(f"[TRACE_LIFECYCLE_UOW] Completed trace_id={trace_id} success=True", flush=True)
+                except Exception as complete_err:
+                    print(f"[TRACE_LIFECYCLE_UOW] Failed to complete trace: {complete_err}", flush=True)
+
         except Exception as e:
             logger.error("execution_error", error=str(e), exc_info=True)
+
+            # =================================================================
+            # LIFECYCLE-SAFE TRACING - Complete on ERROR (fail-safe)
+            # =================================================================
+            if trace_id:
+                try:
+                    from goal_harness.decision_trace_logger import log_decision_complete
+                    log_decision_complete(
+                        trace_id=trace_id,
+                        success=False,
+                        raw_reward=-1.0,
+                        confidence=0.0,
+                        latency_ms=0,
+                        skill_id=None,
+                        artifacts_count=0,
+                        phase="execution_uow_error",
+                        error=str(e)[:200]
+                    )
+                    print(f"[TRACE_LIFECYCLE_UOW] ERROR completion trace_id={trace_id}", flush=True)
+                except Exception as complete_err:
+                    print(f"[TRACE_LIFECYCLE_UOW] ERROR completion failed: {complete_err}", flush=True)
 
             # PHASE 1: Complete execution record on failure
             execution_end = datetime.utcnow()
@@ -2921,6 +3107,26 @@ class GoalExecutorV2:
                 "message": str(e),
                 "goal_id": str(goal.id)
             }
+
+            # =================================================================
+            # LIFECYCLE-SAFE TRACING - Complete on error
+            # =================================================================
+            if trace_id:
+                try:
+                    from goal_harness.decision_trace_logger import log_decision_complete
+                    log_decision_complete(
+                        trace_id=trace_id,
+                        success=False,
+                        raw_reward=-1.0,
+                        confidence=0.0,
+                        latency_ms=0,
+                        skill_id=None,
+                        artifacts_count=0,
+                        phase="execution_uow"
+                    )
+                    print(f"[TRACE_LIFECYCLE_UOW] Completed trace_id={trace_id} success=False", flush=True)
+                except Exception as complete_err:
+                    print(f"[TRACE_LIFECYCLE_UOW] Failed to complete trace: {complete_err}", flush=True)
 
     async def _record_experience_async(
         self,
