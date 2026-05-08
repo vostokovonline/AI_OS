@@ -81,6 +81,14 @@ from experience.shadow_evaluator import (
     ShadowEvaluator,
     get_shadow_evaluator
 )
+from experience.execution_envelope import (
+    ExecutionEnvelope,
+    ExecutionEnvelopeStore
+)
+from experience.learning_pipeline import (
+    LearningPipeline,
+    get_learning_pipeline
+)
 
 __all__ = [
     # Existing
@@ -132,4 +140,12 @@ __all__ = [
     "get_skill_registry",
     "resolve_skill",
     "SkillRegistryError",
+    
+    # Execution envelope
+    "ExecutionEnvelope",
+    "ExecutionEnvelopeStore",
+    
+    # Learning pipeline
+    "LearningPipeline",
+    "get_learning_pipeline",
 ]
