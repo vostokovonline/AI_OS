@@ -13,6 +13,7 @@ from datetime import datetime
 from .trajectory_dataset import (
     LearningSample, TraceContext, TraceSchemaValidator, TRACE_SCHEMA_VERSION
 )
+from goal_harness.decision_trace_logger import TRACE_DIR, QUARANTINE_DIR
 
 
 class RewardNormalizer:
@@ -170,49 +171,99 @@ class TrajectoryDatasetExtractor:
     
     def extract_from_file(self, filepath: Path) -> List[LearningSample]:
         """
-        Extract all valid samples from a single JSONL file.
-        Merges start and completion records by trace_id.
+        Extract all valid samples from trace files.
+        Supports both:
+        - Old JSONL format (multiple rows per trace)
+        - New JSON format (one file per trace, finalized)
         """
         samples = []
-        trace_starts = {}  # trace_id -> start record
-        trace_completions = {}  # trace_id -> completion record
         
         if not filepath.exists():
             return samples
         
-        # First pass: collect starts and completions
-        with open(filepath, "r") as f:
-            for line in f:
-                try:
-                    record = json.loads(line.strip())
-                    trace_id = record.get("trace_id", "")
-                    
-                    if record.get("completed_at"):
-                        # This is a completion record
-                        trace_completions[trace_id] = record
-                    else:
-                        # This is a start record
-                        trace_starts[trace_id] = record
-                except json.JSONDecodeError:
-                    continue
-        
-        # Second pass: merge and extract
-        for trace_id, start in trace_starts.items():
-            completion = trace_completions.get(trace_id)
-            
-            if not completion:
-                # Skip incomplete traces
-                continue
-            
-            # Merge records
-            merged = {**start, **completion}
-            
+        # Determine format by extension
+        if filepath.suffix == ".json":
+            # New format: single trace object
             try:
-                sample = self.extract_sample(merged)
+                with open(filepath, "r") as f:
+                    trace = json.load(f)
+                
+                sample = self.extract_sample(trace)
                 if sample:
                     samples.append(sample)
             except Exception as e:
-                print(f"[DATASET_EXTRACTOR] Failed to extract {trace_id}: {e}", flush=True)
+                print(f"[DATASET_EXTRACTOR] Failed to read {filepath.name}: {e}", flush=True)
+        
+        elif filepath.suffix == ".jsonl":
+            # Old format: multiple rows per trace (legacy support)
+            trace_starts = {}
+            trace_completions = {}
+            
+            with open(filepath, "r") as f:
+                for line in f:
+                    try:
+                        record = json.loads(line.strip())
+                        trace_id = record.get("trace_id", "")
+                        
+                        if record.get("completed_at"):
+                            trace_completions[trace_id] = record
+                        else:
+                            trace_starts[trace_id] = record
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Merge and extract
+            for trace_id, start in trace_starts.items():
+                completion = trace_completions.get(trace_id)
+                if not completion:
+                    continue
+                
+                merged = {**start, **completion}
+                try:
+                    sample = self.extract_sample(merged)
+                    if sample:
+                        samples.append(sample)
+                except Exception as e:
+                    print(f"[DATASET_EXTRACTOR] Failed to extract {trace_id}: {e}", flush=True)
+        
+        return samples
+    
+    def extract_from_directory(self, directory: Path) -> List[LearningSample]:
+        """
+        Extract from all trace files in directory.
+        """
+        samples = []
+        
+        if not directory.exists():
+            return samples
+        
+        # Process JSON files (new format)
+        for filepath in directory.glob("*.json"):
+            file_samples = self.extract_from_file(filepath)
+            samples.extend(file_samples)
+        
+        # Process JSONL files (old format)
+        for filepath in directory.glob("*.jsonl"):
+            file_samples = self.extract_from_file(filepath)
+            samples.extend(file_samples)
+        
+        return samples
+    
+    def extract_all(self, date_pattern: str = "*") -> List[LearningSample]:
+        """
+        Extract samples from all trace directories.
+        Checks both valid and quarantine directories.
+        """
+        samples = []
+        
+        # Extract from valid traces
+        valid_samples = self.extract_from_directory(TRACE_DIR)
+        samples.extend(valid_samples)
+        
+        # Check quarantine for debugging (but don't learn from invalid)
+        if QUARANTINE_DIR.exists():
+            quarantine_count = len(list(QUARANTINE_DIR.glob("*.json")))
+            print(f"[DATASET_EXTRACTOR] Quarantine: {quarantine_count} invalid traces", flush=True)
         
         return samples
     

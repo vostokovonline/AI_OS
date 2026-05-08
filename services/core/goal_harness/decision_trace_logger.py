@@ -20,9 +20,11 @@ from pathlib import Path
 _active_traces: Dict[str, Dict] = {}
 _traces_lock = threading.Lock()
 
-# Trace directory
+# Trace directories
 TRACE_DIR = Path("/app/decision_traces")
+QUARANTINE_DIR = Path("/app/decision_traces_invalid")
 TRACE_DIR.mkdir(exist_ok=True, parents=True)
+QUARANTINE_DIR.mkdir(exist_ok=True, parents=True)
 
 
 def synthesize_context(
@@ -70,6 +72,13 @@ def synthesize_context(
     }
 
 
+# Trace persistence config
+TRACE_DIR = Path("/app/decision_traces")
+QUARANTINE_DIR = Path("/app/decision_traces_invalid")
+TRACE_DIR.mkdir(exist_ok=True, parents=True)
+QUARANTINE_DIR.mkdir(exist_ok=True, parents=True)
+
+
 def log_decision_start(
     goal_id: str,
     goal_type: str = "unknown",
@@ -83,6 +92,7 @@ def log_decision_start(
     """
     Start a new decision trace.
     Returns trace_id for later completion.
+    NOTE: Does NOT write to file - only memory. Finalized on completion.
     """
     global _active_traces
     
@@ -99,7 +109,8 @@ def log_decision_start(
         "phase": phase,
         "context": context or {},
         "started_at": datetime.utcnow().isoformat(),
-        "attempts": []
+        "attempts": [],
+        "status": "pending"
     }
     
     with _traces_lock:
@@ -107,8 +118,7 @@ def log_decision_start(
     
     print(f"[TRACE_START] trace_id={trace_id} goal_id={goal_id[:8] if goal_id else 'none'} phase={phase}", flush=True)
     
-    # Write to file for persistence
-    _write_trace_to_file(trace, "start")
+    # NO file write on start - wait for completion
     
     return trace_id
 
@@ -148,6 +158,22 @@ def log_attempt(
     print(f"[TRACE_ATTEMPT] trace_id={trace_id} attempt={actual_attempt} success={success}", flush=True)
 
 
+def _validate_skill_id(skill_id: Optional[str]) -> tuple[bool, str]:
+    """
+    Validate skill_id for canonical format.
+    Returns (is_valid, reason)
+    """
+    if skill_id is None:
+        return False, "skill_id_is_null"
+    if isinstance(skill_id, str):
+        skill_lower = skill_id.lower()
+        if skill_lower in ["", "unknown", "none", "null"]:
+            return False, f"skill_id_is_{skill_lower}"
+        if not skill_lower.startswith("core."):
+            return False, "skill_id_not_canonical"
+    return True, "valid"
+
+
 def log_decision_complete(
     trace_id: str,
     success: bool,
@@ -162,10 +188,14 @@ def log_decision_complete(
 ) -> None:
     """
     Complete a decision trace with outcome.
+    Writes finalized single-trace object (not append-only rows).
     """
     global _active_traces
     
     completed_at = datetime.utcnow().isoformat()
+    
+    # Validate skill_id BEFORE updating trace
+    is_valid_skill, invalid_reason = _validate_skill_id(skill_id)
     
     with _traces_lock:
         if trace_id in _active_traces:
@@ -180,28 +210,53 @@ def log_decision_complete(
             trace["phase"] = phase
             trace["error"] = error
             trace["final_context"] = final_context or {}
+            trace["status"] = "completed"
+            trace["skill_validation"] = invalid_reason if not is_valid_skill else "valid"
             
             # Remove from active (completed)
             del _active_traces[trace_id]
-    
-    print(f"[TRACE_COMPLETE] trace_id={trace_id} success={success} raw_reward={raw_reward}", flush=True)
-    
-    # Write to file for persistence
-    with _traces_lock:
-        if trace_id in _active_traces:
-            trace = _active_traces[trace_id]
         else:
+            # Trace might have been lost - create minimal record
             trace = {
                 "trace_id": trace_id,
                 "completed_at": completed_at,
                 "success": success,
-                "raw_reward": raw_reward
+                "raw_reward": raw_reward,
+                "skill_id": skill_id,
+                "status": "completed",
+                "skill_validation": invalid_reason if not is_valid_skill else "valid"
             }
-    _write_trace_to_file(trace, "complete")
+    
+    print(f"[TRACE_COMPLETE] trace_id={trace_id} success={success} skill_validation={invalid_reason}", flush=True)
+    
+    # Write finalized trace to file (single object, not append-only rows)
+    if is_valid_skill:
+        _write_finalized_trace(trace, TRACE_DIR, "completed")
+    else:
+        # Quarantine invalid traces
+        trace["quarantine_reason"] = invalid_reason
+        _write_finalized_trace(trace, QUARANTINE_DIR, f"quarantine_{invalid_reason}")
+
+
+def _write_finalized_trace(trace: Dict, output_dir: Path, prefix: str) -> None:
+    """
+    Write finalized trace as single object (not append-only rows).
+    Uses trace_id as filename for deterministic overwrite.
+    """
+    try:
+        trace_id = trace.get("trace_id", "unknown")
+        filename = output_dir / f"{prefix}_{trace_id}.json"
+        
+        with open(filename, "w") as f:
+            json.dump(trace, f, indent=2)
+        
+        print(f"[TRACE_WRITE] {prefix} -> {filename}", flush=True)
+    except Exception as e:
+        print(f"[TRACE_WRITE_ERROR] {e}", flush=True)
 
 
 def _write_trace_to_file(trace: Dict, phase: str) -> None:
-    """Write trace to JSONL file for persistence."""
+    """Legacy compatibility - writes to JSONL append-only."""
     try:
         timestamp = datetime.utcnow().strftime("%Y%m%d")
         filename = TRACE_DIR / f"trace_{timestamp}.jsonl"
