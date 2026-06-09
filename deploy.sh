@@ -112,8 +112,16 @@ for container in "${CORE_CONTAINERS[@]}"; do
         fi
 
         if [ -d "${CORE_DIR}/${dir}" ]; then
-            # Use tar with exclude to avoid __pycache__ permission issues
-            tar -c --exclude='__pycache__' --exclude='*.pyc' -C "${CORE_DIR}" "${dir}" | \
+            # Use tar with exclude to avoid problematic files
+            tar -c \
+                --exclude='__pycache__' \
+                --exclude='*.pyc' \
+                --exclude='.git' \
+                --exclude='.pytest_cache' \
+                --exclude='*.pyo' \
+                --exclude='*.egg-info' \
+                --exclude='tests/' \
+                -C "${CORE_DIR}" "${dir}" | \
             docker exec -i ${container} tar -x -C /app/
             log_success "✓ ${dir}/"
         else

@@ -391,6 +391,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onToggleEmotionalLayer }) =
             <Activity size={18} className={view === 'evolution' ? 'text-pink-400' : ''} />
             <span className="text-sm font-medium">Эволюция</span>
           </button>
+          <button
+            onClick={() => setView('vfield')}
+            className={`
+              w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all
+              ${
+                view === 'vfield'
+                  ? 'bg-blue-900/50 border border-blue-500 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }
+            `}
+          >
+            <Layers size={18} className={view === 'vfield' ? 'text-blue-400' : ''} />
+            <span className="text-sm font-medium">V-Field</span>
+          </button>
         </div>
       </div>
 

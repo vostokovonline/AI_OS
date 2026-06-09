@@ -1,0 +1,22 @@
+{
+  "entry_id": "edc64cfa",
+  "execution_id": "exec-002",
+  "selected_skill": "core.echo",
+  "rejected_candidates": [
+    {
+      "skill": "core.write_file",
+      "estimated_reward": 0.7,
+      "reason": "lower score"
+    },
+    {
+      "skill": "core.web_research",
+      "estimated_reward": 0.3,
+      "reason": "too slow"
+    }
+  ],
+  "selection_context": {
+    "selected_reward": 0.8,
+    "policy": "thompson_v1"
+  },
+  "created_at": "2026-05-10T07:14:23.424861"
+}

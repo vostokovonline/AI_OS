@@ -1,0 +1,10 @@
+{
+  "node_id": "29d2e550",
+  "execution_id": "goal-002",
+  "node_type": "subgoal",
+  "parent_node_id": "08dd4bc8",
+  "planner_id": "planner-v1",
+  "decomposition_depth": 1,
+  "created_at": "2026-05-09T23:08:35.091460",
+  "status": "pending"
+}

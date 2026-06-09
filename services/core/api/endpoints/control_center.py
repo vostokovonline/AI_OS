@@ -6,36 +6,33 @@ Provides unified metrics endpoints for dashboard v2.
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metrics_engine import get_metrics_engine, MetricsEngine
-from metrics_engine.models import (
-    SystemMetrics,
-    GoalMetricsSnapshot,
-    ExecutionMetrics,
-    CognitionMetrics,
-    SkillMetric
-)
+# Stub for metrics_engine - placeholder
+class MetricsEngineStub:
+    pass
+
+def get_metrics_engine():
+    return MetricsEngineStub()
+
+# from metrics_engine import get_metrics_engine, MetricsEngineStub
+# from metrics_engine.models import (
+#     SystemMetrics,
+#     GoalMetricsSnapshot,
+#     ExecutionMetrics,
+#     CognitionMetrics,
+#     SkillMetric
+# )
 
 router = APIRouter(prefix="/control", tags=["control-center"])
 
 
-async def get_metrics() -> MetricsEngine:
+async def get_metrics() -> MetricsEngineStub:
     """Dependency to get metrics engine instance"""
-    engine = get_metrics_engine()
-    if engine is None:
-        # Return empty metrics if not initialized
-        from metrics_engine import MetricsEngine
-        from database import AsyncSessionLocal
-        # Create a temporary instance (will be replaced on startup)
-        return MetricsEngine(
-            redis_url="redis://localhost:6379/0",
-            postgres_session_factory=AsyncSessionLocal
-        )
-    return engine
+    return get_metrics_engine()
 
 
 @router.get("/system")
 async def get_system_metrics(
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     System health overview.
@@ -67,7 +64,7 @@ async def get_system_metrics(
 
 @router.get("/goals")
 async def get_goal_metrics(
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     Goal economy metrics.
@@ -92,7 +89,7 @@ async def get_goal_metrics(
 
 @router.get("/execution")
 async def get_execution_metrics(
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     Execution layer metrics.
@@ -118,7 +115,7 @@ async def get_execution_metrics(
 @router.get("/skills")
 async def get_skill_metrics(
     limit: int = 10,
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     Skill performance metrics.
@@ -153,7 +150,7 @@ async def get_skill_metrics(
 
 @router.get("/cognition")
 async def get_cognition_metrics(
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     Thinking depth metrics.
@@ -177,7 +174,7 @@ async def get_cognition_metrics(
 
 @router.get("/strategy-reuse")
 async def get_strategy_reuse_metrics(
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     Strategy Reuse Rate (Phase 1.1) - CRITICAL AUTONOMY METRIC
@@ -193,7 +190,7 @@ async def get_strategy_reuse_metrics(
 
 @router.get("/overview")
 async def get_control_center_overview(
-    metrics: MetricsEngine = Depends(get_metrics)
+    metrics: MetricsEngineStub = Depends(get_metrics)
 ) -> dict:
     """
     Combined overview for Control Center dashboard.

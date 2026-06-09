@@ -1,0 +1,14 @@
+{
+  "event_id": "ac5b82b7",
+  "event_type": "task_created",
+  "execution_id": "exec-chain",
+  "parent_event_id": null,
+  "previous_event_hash": "",
+  "chain_hash": "df64c4d587cde82f",
+  "data": {
+    "goal": "test"
+  },
+  "timestamp": "2026-05-10T07:27:28.976508",
+  "sequence": 5,
+  "event_hash": "f35d966e2e55969e"
+}

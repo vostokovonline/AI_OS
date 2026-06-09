@@ -47,6 +47,11 @@ from canonical_skills.echo import EchoSkill
 from canonical_skills.write_file import WriteFileSkill
 from evaluation_engine import evaluation_engine
 
+# Import envelope tracking
+from experience.execution_envelope import ExecutionEnvelope
+from experience.enforcement_config import get_enforcement_config, get_enforcement_metrics
+from experience.execution_adapter import ExecutionContext
+
 # Import LLM for content generation
 from llm_fallback import chat_with_fallback
 
@@ -66,6 +71,13 @@ except ImportError:
 
 # Import logging
 from logging_config import get_logger
+
+# Causal Bridge — closed-loop execution → epistemic
+try:
+    from epistemic_factory import get_causality_bridge
+    _HAS_BRIDGE = True
+except ImportError:
+    _HAS_BRIDGE = False
 
 # NEW: Planner for learning loop (Phase 4 - Decision Closure)
 try:
@@ -194,8 +206,23 @@ class GoalExecutorV2:
     RETRY_DELAY_SECONDS = 2
     CONFIDENCE_THRESHOLD = 0.6
 
-    def __init__(self):
+    def __init__(self, _kernel_capability=None, _execution_id=""):
+        self._execution_id = _execution_id  # deterministic execution_id from kernel journal
         from infrastructure.uow import GoalRepository
+
+        # Architectural hardening: verify kernel capability.
+        # If a capability was provided, validate it against the global kernel.
+        # If no capability, the caller must go through kernel.dispatch().
+        if _kernel_capability is not None:
+            from execution_dynamics import _get_kernel
+            kernel = _get_kernel()
+            if not _kernel_capability.is_valid(getattr(kernel, '_capability_epoch', 0)):
+                raise RuntimeError(
+                    "GoalExecutorV2: invalid kernel capability. "
+                    "This executor cannot be instantiated outside kernel authority. "
+                    "Use execution_dynamics.dispatch_goal() or KernelIngress instead."
+                )
+
         self._repo = GoalRepository()
         self._init_skills()
 
@@ -2859,6 +2886,23 @@ class GoalExecutorV2:
                 success=True
             )
 
+            # Causal bridge: execution → epistemic feedback
+            if _HAS_BRIDGE:
+                try:
+                    bridge_entry_id = self._execution_id or str(execution_rec.execution_id)
+                    get_causality_bridge().on_execution_completed(
+                        goal_id=str(goal.id),
+                        entry_id=bridge_entry_id,
+                        success=True,
+                        duration_ms=execution_rec.duration_ms or 0,
+                    )
+                except Exception as bridge_err:
+                    logger.warning(
+                        "bridge_feedback_failed",
+                        error=str(bridge_err),
+                        goal_id=str(goal.id),
+                    )
+
             # Write trace directly to trace store (bypassing event bus for cross-process)
             try:
                 from trace_store import get_trace_store
@@ -3057,6 +3101,23 @@ class GoalExecutorV2:
                         skill_id=skill_id_from_exception,
                         error_type=execution_rec.error_type
                     )
+
+                    # Causal bridge: execution → epistemic feedback on failure
+                    if _HAS_BRIDGE:
+                        try:
+                            bridge_entry_id = self._execution_id or str(execution_rec.execution_id)
+                            get_causality_bridge().on_execution_failed(
+                                goal_id=str(goal.id),
+                                entry_id=bridge_entry_id,
+                                error=execution_rec.error_message or str(e),
+                                duration_ms=execution_rec.duration_ms or 0,
+                            )
+                        except Exception as bridge_err:
+                            logger.warning(
+                                "bridge_feedback_failed",
+                                error=str(bridge_err),
+                                goal_id=str(goal.id),
+                            )
 
                     # =================================================================
                     # RECORD FAILED EXPERIENCE - ALSO LEARNING MOMENT
@@ -3422,43 +3483,129 @@ Format: Markdown"""
         
         return params
 
+    def _track_execution_envelope(self, skill, goal_id: str, inputs: dict) -> Optional[ExecutionEnvelope]:
+        """
+        Track execution through envelope. 
+        
+        This adds observability to skill execution:
+        - Records envelope creation
+        - Updates metrics
+        - Saves envelope for replay
+        """
+        from uuid import uuid4
+        from experience.execution_envelope import ExecutionEnvelopeStore
+        
+        config = get_enforcement_config()
+        metrics = get_enforcement_metrics()
+        
+        # Get skill_id from skill object
+        skill_id = getattr(skill, 'id', None) or 'unknown'
+        
+        # Only track skills with core.* prefix (canonical skills)
+        if not skill_id.startswith('core.'):
+            metrics.record_legacy_execution()
+            return None
+        
+        # Build context features
+        context_features = {
+            "goal_id": goal_id,
+            "input_keys": list(inputs.keys()) if inputs else [],
+            "skill_id": skill_id,
+        }
+        
+        # Create envelope
+        envelope = ExecutionEnvelope.create(
+            trace_id=uuid4().hex[:8],
+            policy_version="legacy_v1",
+            selected_skill_id=skill_id,
+            shadow_skill_id=None,
+            candidate_skill_ids=[skill_id],
+            context_features=context_features,
+            goal_type="achievable",
+            domain="general"
+        )
+        
+        # Store envelope for replay
+        try:
+            store = ExecutionEnvelopeStore()
+            store.save(envelope)
+        except Exception:
+            pass  # Non-critical, don't fail execution
+        
+        metrics.record_envelope_execution()
+        
+        return envelope
+
     async def _safe_skill_execute(self, skill, inputs: dict, goal_id: str) -> SkillResult:
         """
         UNIFIED SKILL EXECUTOR ADAPTER (Phase 5.2)
         Handles async/sync and returns deterministic SkillResult.
+        
+        Now routes through ExecutionService for envelope enforcement.
+        This is the transitional step - in HARD_FAIL mode this becomes mandatory.
         """
         import asyncio
-        import inspect
         
+        # Get skill_id from skill object
+        skill_id = getattr(skill, 'id', None) or 'unknown'
+        
+        # Try ExecutionService first (envelope-based execution)
+        # Fall back to direct execution if not available
         try:
-            # Check if method is coroutine function
-            if asyncio.iscoroutinefunction(skill.execute):
-                result = await skill.execute(inputs, goal_id)
-            else:
-                result = skill.execute(inputs, goal_id)
+            from experience.execution_service import get_execution_service, ExecutionRequest
             
-            # Ensure result has proper attributes
-            if hasattr(result, 'success') and hasattr(result, 'artifacts'):
-                return result
-            else:
-                # Malformed result - treat as failure
-                return type('obj', (object,), {
-                    'success': False,
-                    'error': 'Malformed SkillResult',
-                    'artifacts': []
-                })()
-                
-        except Exception as e:
-            logger.warning("skill_execution_failed", 
-                skill=getattr(skill, 'id', 'unknown'),
-                error=str(e)[:100]
+            service = get_execution_service()
+            request = ExecutionRequest(
+                skill_id=skill_id,
+                goal_id=goal_id,
+                inputs=inputs,
+                goal_type="achievable",
+                domain="general",
+                policy_version="legacy_v1"
             )
-            # Real failure - NOT fake success
-            return type('obj', (object,), {
-                'success': False,
-                'error': str(e)[:100],
-                'artifacts': []
-            })()
+            
+            # Execute through service (envelope-based)
+            result = await service.execute(request)
+            return result
+            
+        except Exception as service_error:
+            # Fall back to direct execution (for now, in warn mode)
+            logger.debug(
+                "execution_service_fallback",
+                skill=skill_id,
+                error=str(service_error)[:50]
+            )
+            
+            # Track execution through envelope (observability)
+            self._track_execution_envelope(skill, goal_id, inputs)
+            
+            try:
+                # Check if method is coroutine function
+                if asyncio.iscoroutinefunction(skill.execute):
+                    result = await skill.execute(inputs, goal_id)
+                else:
+                    result = skill.execute(inputs, goal_id)
+                
+                # Ensure result has proper attributes
+                if hasattr(result, 'success') and hasattr(result, 'artifacts'):
+                    return result
+                else:
+                    return SkillResult(
+                        success=False,
+                        error='Malformed SkillResult',
+                        artifacts=[]
+                    )
+                    
+            except Exception as e:
+                logger.warning("skill_execution_failed", 
+                    skill=skill_id,
+                    error=str(e)[:100]
+                )
+                return SkillResult(
+                    success=False,
+                    error=str(e)[:100],
+                    artifacts=[]
+                )
 
     async def _record_skill_selection(
         self, 

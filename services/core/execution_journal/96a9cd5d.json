@@ -1,0 +1,14 @@
+{
+  "event_id": "96a9cd5d",
+  "event_type": "plan_generated",
+  "execution_id": "exec-chain",
+  "parent_event_id": "ac5b82b7",
+  "previous_event_hash": "f35d966e2e55969e",
+  "chain_hash": "f9a37cd8182c5d19",
+  "data": {
+    "plan": "steps"
+  },
+  "timestamp": "2026-05-10T07:27:28.977804",
+  "sequence": 6,
+  "event_hash": "56186f5eb5cdecec"
+}

@@ -1,0 +1,12 @@
+{
+  "event_id": "83071cb7",
+  "event_type": "task_created",
+  "execution_id": "exec-001",
+  "parent_event_id": null,
+  "data": {
+    "goal": "test goal"
+  },
+  "timestamp": "2026-05-10T07:14:23.416686",
+  "sequence": 1,
+  "event_hash": "475062ff03eb37ce"
+}

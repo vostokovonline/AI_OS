@@ -29,6 +29,7 @@ class PolicyVersion(Enum):
 
 
 SCHEMA_VERSION = "v3"
+REWARD_VERSION = "reward_v1"
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class LearningEvent:
     
     # Schema
     schema_version: str = SCHEMA_VERSION
+    reward_version: str = REWARD_VERSION
     
     def to_dict(self) -> dict:
         return {
@@ -92,6 +94,7 @@ class LearningEvent:
             "regret": round(self.regret, 3),
             "policy_version": self.policy_version,
             "schema_version": self.schema_version,
+            "reward_version": self.reward_version,
             # Reward decomposition
             "reward_success": round(self.reward_success, 3),
             "reward_latency": round(self.reward_latency, 3),

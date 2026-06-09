@@ -1,0 +1,20 @@
+{
+  "transaction_id": "2a28baee",
+  "execution_id": "exec-002",
+  "intent_id": "da18ca6f",
+  "decision_boundary_id": "exec-002",
+  "selected_skill": "core.echo",
+  "state_machine_id": "exec-002",
+  "current_state": "planned",
+  "event_chain_id": "",
+  "event_count": 0,
+  "evaluation_vector_id": null,
+  "reward": 1.0,
+  "counterfactual_id": null,
+  "temporal_metric_ids": [
+    "reward"
+  ],
+  "created_at": "2026-05-10T07:36:20.858118",
+  "completed_at": "2026-05-10T07:36:20.864006",
+  "transaction_hash": "a44b9ee78fb22e8a"
+}

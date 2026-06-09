@@ -1,0 +1,21 @@
+{
+  "intent_id": "fff6f4a4",
+  "execution_id": "exec-001",
+  "parent_goal": "Write a file",
+  "desired_outcome": "file_created",
+  "success_criteria": {
+    "file_exists": true
+  },
+  "risk_budget": 0.3,
+  "latency_budget_ms": 30000,
+  "token_budget": 10000,
+  "allowed_capabilities": [
+    "*"
+  ],
+  "forbidden_capabilities": [],
+  "autonomy_level": "autonomous",
+  "requires_approval_for": [],
+  "rollback_strategy": null,
+  "rollback_trigger": null,
+  "created_at": "2026-05-10T07:35:28.946189"
+}

@@ -1,0 +1,17 @@
+{
+  "node_id": "fcdb9b6a",
+  "execution_id": "exec-002",
+  "node_type": "subgoal",
+  "parent_node_id": "a3c9c41c",
+  "edge_type": "decomposed_into",
+  "planner_id": null,
+  "decomposition_depth": 1,
+  "created_at": "2026-05-10T07:06:19.653462",
+  "status": "pending",
+  "outgoing_edges": [
+    "d3f7db1e"
+  ],
+  "incoming_edges": [
+    "45c24d7f"
+  ]
+}

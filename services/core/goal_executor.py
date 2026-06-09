@@ -249,17 +249,27 @@ class GoalExecutor:
                 )
                 return {"status": "error", "message": f"Execution forbidden: {reason}"}
 
-            # DELEGATE TO GOAL EXECUTOR V2 FOR ATOMIC GOALS
+            # ROUTE THROUGH EXECUTION KERNEL — sole execution authority
             if goal.is_atomic:
                 logger.info(
-                    "delegating_to_v2",
+                    "routing_through_kernel",
                     goal_id=goal_id,
                     goal_title=goal.title
                 )
-                from goal_executor_v2 import goal_executor_v2
-                return await goal_executor_v2.execute_goal_with_uow(
-                    uow, goal_id, session_id
-                )
+                from execution_dynamics import dispatch_goal
+                ex_result = await dispatch_goal(goal_id, uow=uow)
+                return {
+                    'success': ex_result.success,
+                    'goal_id': ex_result.goal_id,
+                    'artifacts': ex_result.artifacts,
+                    'error': ex_result.error,
+                    'execution_id': ex_result.execution_id,
+                    'lease_id': ex_result.lease_id,
+                    'dispatch_epoch': ex_result.dispatch_epoch,
+                    'execution_pressure': ex_result.execution_pressure,
+                    'duration_ms': ex_result.duration_ms,
+                    'did_skip': ex_result.did_skip,
+                }
 
             # Transition: pending → active
             await transition_service.transition(
@@ -364,8 +374,17 @@ def _run_async(coro):
 
 @celery_app.task(bind=True)
 def execute_goal_task(self, goal_id: str, session_id: str = None):
-    """Фоновая задача для выполнения цели"""
-    result = _run_async(goal_executor.execute_goal(goal_id, session_id))
+    """
+    Фоновая задача для выполнения цели — через Execution Kernel.
+
+    Kernel обеспечивает:
+      - lease enforcement (выполнение только с разрешения kernel)
+      - dispatch journal (immutable causal chain)
+      - execution dynamics (capture, lock-in, persistence)
+      - anti-fragmentation groups (co-scheduling)
+    """
+    from execution_dynamics import dispatch_goal
+    result = _run_async(dispatch_goal(goal_id))
     return result
 
 

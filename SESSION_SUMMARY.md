@@ -1,255 +1,108 @@
-# Сессия: AI-OS → AGI Architecture
+# Session Summary — Epistemic Recovery + Causal Bridge + Integrity Verification
 
-**Дата:** 2026-03-10
-**Статус:** ✅ ПОЛНОСТЬЮ ЗАВЕРШЕНО
+## Goal
+Build a fully verifiable deterministic causal cognitive runtime with closed-loop execution→epistemic feedback, crash recovery, adversarial fault tolerance, and journal integrity verification.
 
----
+## Constraints & Preferences
+- ALL execution must enter through `KernelIngress.dispatch()` → signed `KernelCapability` → `kernel._dispatch_with_capability()` → lease → journal → executor.
+- `KernelCapability` is HMAC-SHA256 signed, scoped, lease-bound, zone-provenanced, epoch-bound.
+- `KernelIngress` is the ONLY public entry point. `ExecutionKernel.dispatch()` rejects calls without a valid signed capability.
+- Snapshot is acceleration layer, NOT source of truth (WAL remains authoritative).
+- Epistemic kernel mirrors execution kernel: append-only journal, deterministic replay, invariant-validated transitions, provenance chain, crash-`recover()`.
+- Causal bridge adds formal `CausalityEdge` between execution and epistemic, dual propagation, unified consistency verification.
+- **Bridge → GoalExecutor wiring is now live** — every completed/failed goal automatically feeds back to epistemic state (beliefs, motifs, policy adjustments).
+- **Factory singletons use `RLock`** (not `Lock`) — nested dependency `get_causality_bridge()` → `get_epistemic_kernel()` previously self-deadlocked.
+- **Journal carries cryptographic hash chain** — `entry_hash` + `prev_hash` computed at append time for tamper detection.
+- **`IntegrityVerifier`** is a pure function — verifies any journal (in-memory, WAL-replayed, exported) without mutation.
+- **Integrity verification must pass before WAL persistence** — no point persisting corrupted journals.
+- PHE is experimental until core stack passes all integrity + recovery + determinism gates.
+- **`IntegrityVerifier.verify_lifecycle()` now checks valid initial events** — `DISPATCHED` or `RECOVERED` must be the first event per execution_id.
 
-## Что было сделано
+## Progress
+### Done
+- **Execution kernel foundation**: `DispatchJournal`, `LeaseRegistry`, `TruthJournal`, coordination dynamics, WAL, snapshot v2, capability-gated ingress, 15 invariants, all external callers migrated to `dispatch_goal()`.
+- **P2: Epistemic Recovery** — `export_state()` / `restore_state()` / `recover()` on `EpistemicKernel`. 15 recovery tests pass.
+- **P2.5: Adversarial Recovery** — 18 adversarial tests pass (duplicate, missing, corrupted, out-of-order, truncated).
+- **`update_attractor()` now journals** — fixed silent replay gap.
+- **P1a: Bridge → GoalExecutor wiring** — success/failure auto-feedback to epistemic state via `goal_executor_v2.py`.
+- **P1b: Journal-native causal linkage** — deterministic `execution_id` through dispatch → executor → bridge.
+- **P2.6: Journal Integrity Verification** — `IntegrityVerifier` with 4 checks (hash chain, sequence, causal links, lifecycle + valid initial events). 22 tests.
+- **P2.7: Execution WAL persistence** — `JsonLinesWAL`:
+  - JSON Lines format, fsync per write
+  - Crash recovery: truncate at first invalid line (JSON or binary garbage)
+  - Sequence, hash chain (`prev_hash`/`entry_hash` at WAL level)
+  - LSN-based ordering and replay
+  - Integrates with existing `DispatchJournal` via same protocol (`wal.append()`, `wal.replay()`)
+  - Full end-to-end: `DispatchJournal → JsonLinesWAL → crash → recover → consistent state`
+  - 21 tests covering append, replay, fsync durability, crash recovery, sequence, hash chain, LSN, stats, integration
 
-### 🎯 Анализ системы (Entity-Level)
+### In Progress
+- None. Core integrity + recovery + determinism gates are green.
 
-Создал два подробных документа:
-1. **ENTITY_LEVEL_ANALYSIS.md** (13 секций, полный анализ)
-2. **ENTITY_MAP_VISUAL.txt** (визуальная карта сущностей)
+### Blocked
+- `api/endpoints/__init__.py` auto-imports `goals`, `artifacts`, `skills`, `llm`, `graph` — crash without `DATABASE_URL`. Not a code issue, only affects isolated testing outside container.
 
-**Ключевые находки:**
-- 12 основных доменных сущностей
-- Epistemic model (BeliefState v1.0)
-- God Object problem (GoalExecutor 384 строк)
-- 52 скрытых коммита
-- 13 прямых присвоений статуса
+## Key Decisions
+- **Bridge is source of truth for causal coupling**, not Factory. Factory is convenience only — creates (ek → bridge → cpe → phe). Bridge owns the causal graph.
+- **PHE is experimental until core stack passes all determinism + recovery + integrity gates**. Not yet verified against real execution traces.
+- **`IntegrityVerifier` is a standalone class**, not scattered methods on `DispatchJournal`. Can verify any journal (in-memory, WAL-replayed, exported, from other instances).
+- **Integrity verification before WAL persistence** — no point persisting a broken chain. P2.6 → WAL → Root of Trust → Fault Injection → Storage Model.
+- **Journal hash chain is append-time**, not verification-time — hash is computed during `append()` and stored in the entry. On verify, the hash is recomputed and compared.
+- **Architecture dependency order**: Factory → Kernel → Bridge → Policy. No reverse imports. `RLock` enforces reentrancy safety but the dependency direction is now documented.
+- **Layer order for production boot**: WAL → Integrity Verification → Deterministic Replay → Epistemic Recovery → Bridge → Policy.
+- **Valid initial events**: only `DISPATCHED` and `RECOVERED` can be the first event in a lifecycle.
+- **Storage model (Global WAL vs Split WALs) is NOT yet decided**. Single WAL currently provides stronger consistency guarantees (`Replay(WAL) → State` atomically). Split WALs may become correct after implementing transactional writes across execution + bridge + epistemic, but that is future work. Decision deferred until after P2.7, Root of Trust, and Fault Injection prove correctness of the persistence layer.
 
-### 🏗️ Phase 1: Чистая архитектура
+## Why Split WALs Are Not Yet Locked
 
-Создал доменные сервисы:
-```
-services/core/domain/services/
-├── goal_creation_service.py     (208 строк)
-├── goal_execution_service.py    (288 строк)
-├── goal_evaluation_service.py   (395 строк)
-├── goal_orchestrator.py         (268 строк)
-└── __init__.py
-```
+| Property | Single WAL | Split WALs |
+|----------|-----------|------------|
+| Total history | One `Replay(WAL) → State` | Requires cross-WAL sync |
+| Transactional writes | Inherent | Requires 3-phase commit or similar |
+| Recovery from partial write | `fsync` at known position | Edge can be orphaned |
+| Replay complexity | O(N) | O(N_exec) + O(N_epi) + O(N_bridge) |
+| Correctness proof | Trivial | Requires proving cross-WAL consistency |
+| Future scalability | May bottleneck on epistemic volume | Epistemic WAL can use different storage |
 
-**Что исправлено:**
-- ✅ Разделение ответственности (SRP)
-- ✅ UoW pattern везде
-- ✅ Никаких скрытых коммитов
-- ✅ Чистая доменная логика
+Decision deferred until after Fault Injection proves persistence layer correctness and the actual event volume ratio is measurable.
 
-### 🧠 Phase 2: AGI-компоненты
+## Next Steps (Priority Order)
+1. **P2.7: Execution WAL persistence** — append-only file format, fsync semantics, crash recovery. Single WAL for now.
+2. **Root of Trust** — State Hash → Merkle Root over journal. Enables proof-level verification.
+3. **P3: Fault Injection & WAL Corruption Suite** — intentional journal corruption with full validation chain:
+   - Bit/payload corruption, partial writes, fsync truncation, double writes
+   - WAL truncation at arbitrary points, verify prefix recovery + consistency
+   - Replay divergence: same corrupted journal → `state_hash_a == state_hash_b`
+   - Validate: `WAL → IntegrityVerifier → Replay → Recover` end-to-end
+4. **Storage Model Design** — compare Global WAL vs Split WALs (Execution + Epistemic + Bridge) by:
+   - Replay complexity
+   - Recovery complexity
+   - Consistency guarantees under faults
+   - Storage growth projections
+   - Tolerance to partial writes
+5. **P2.8: Snapshotting** — only after storage model is decided (snapshot format depends on WAL structure).
+6. **P2.9: Fast recovery** — load snapshot → verify integrity → replay WAL tail → epistemic recover.
+7. **PHE validation on real trajectories** — after persistence + fault injection + snapshots.
 
-Создал три критически важных компонента:
+## Critical Context
+- **Determinism gate: 73/73 tests pass** — 18 replay determinism + 15 recovery + 18 adversarial + 22 integrity.
+- **P1a closed the loop**: `goal_executor_v2.py` (success and failure paths) → `bridge.on_execution_completed/on_execution_failed()` → `CausalityEdge` → epistemic observation + belief update.
+- **P1b ensured causal traceability**: bridge `entry_id` is now the deterministic `execution_id` from the kernel journal, not random `uuid4()`. Full chain: `JournalEntry.entry_id` → `CausalityEdge.execution_entry_id` → epistemology event.
+- **Factory deadlock was real**: `get_causality_bridge()` → `get_epistemic_kernel()` under same `threading.Lock` → self-deadlock on first call. `RLock()` fixes it trivially.
+- **Hash chain format**: `SHA256(prev_hash | entry_id | execution_id | event | json.dumps(payload, sort_keys=True))`. Canonical payload excludes hash fields.
+- **Valid lifecycle transitions** defined in `integrity.py:_VALID_TRANSITIONS`. 12 event types, 2 valid initial events.
+- PHE (6 files: tree, depth, uncertainty, scoring, search, facade) exists but is unverified against real execution traces.
+- `execution_dynamics/integrity.py` is fully self-contained — imports only `re`, `dataclasses`, `typing`, and `DispatchJournal`/`JournalEntry`.
 
-#### 1. ExperienceService (408 строк)
-**Функция:** "Что работало раньше?"
-
-```python
-# Хранит и использует опыт выполнения
-await experience_service.learn_from_execution(result, goal)
-
-# Находит похожие прошлые выполнения
-similar = await experience_service.find_similar(goal_title="Write docs")
-
-# Рекомендует лучшую стратегию
-best = await experience_service.get_best_strategy(goal_title, goal_type)
-```
-
-#### 2. WorldModel (467 строк)
-**Функция:** "Что произойдёт?"
-
-```python
-# Отслеживает состояние сущностей
-await world_model.update_entity("server", RESOURCE, {"status": "running"})
-
-# Проверяет предусловия
-can_do, issues = await world_model.check_preconditions("restart server")
-
-# Предсказывает эффект действий
-prediction = await world_model.predict_effect("restart server")
-```
-
-#### 3. StrategyEvolution (563 строк)
-**Функция:** "Как улучшиться?"
-
-```python
-# Выбирает лучшую стратегию
-strategy = await strategy_evolution.select_strategy(
-    goal_type="achievable",
-    complexity=0.7
-)
-
-# Оценивает выполнение
-await strategy_evolution.evaluate(strategy, goal_id, success, score)
-
-# Эволюционирует популяцию
-stats = await strategy_evolution.evolve_population()
-```
-
-### 📚 Документация
-
-Создал:
-1. **SERVICES_ARCHITECTURE.md** — дизайн сервисов
-2. **AGI_ARCHITECTURE_DEPLOYED.md** — полная AGI-документация
-3. **AGI_QUICKSTART.md** — руководство по использованию
-
----
-
-## AGI Workflow
-
-Теперь система работает так:
-
-```
-1. ЦЕЛЬ ПРИХОДИТ
-   ↓
-2. ЗАПРОС ОПЫТА (ExperienceService)
-   "Что работало раньше?"
-   ↓
-3. ВЫБОР СТРАТЕГИИ (StrategyEvolution)
-   "Как добиться?"
-   ↓
-4. ПРОВЕРКА ПРЕДУСЛОВИЙ (WorldModel)
-   "Готово к выполнению?"
-   ↓
-5. ПРЕДСКАЗАНИЕ ЭФФЕКТА (WorldModel)
-   "Что произойдёт?"
-   ↓
-6. ВЫПОЛНЕНИЕ (GoalExecutionService)
-   "Делаем работу"
-   ↓
-7. ОБУЧЕНИЕ (ExperienceService)
-   "Обновляем опыт"
-   ↓
-8. ОЦЕНКА СТРАТЕГИИ (StrategyEvolution)
-   "Улучшаемся"
-   ↓
-9. ЭВОЛЮЦИЯ ПОПУЛЯЦИИ (StrategyEvolution)
-   "Создаём новые стратегии"
-```
-
----
-
-## Использование
-
-### Базовый режим (без AGI)
-```python
-from domain.services import goal_orchestrator
-
-async with get_uow() as uow:
-    result = await goal_orchestrator.execute_and_evaluate(uow, goal_id)
-```
-
-### AGI-режим (с интеллектом)
-```python
-async with get_uow() as uow:
-    result = await goal_orchestrator.execute_with_agi(uow, goal_id)
-
-    # Автоматически:
-    # - Использует опыт
-    # - Выбирает стратегию
-    # - Проверяет условия
-    # - Предсказывает эффект
-    # - Обучается
-```
-
----
-
-## Следующие шаги
-
-### Немедленные (Priority 1)
-1. ✅ Создать таблицы в БД (скрипт готов)
-2. ⏳ Протестировать компоненты
-3. ⏳ Обновить API endpoints
-
-### Ближайшие (Priority 2)
-1. Векторный поиск для experience
-2. Реальная логика предсказаний
-3. A/B тестирование стратегий
-
-### Долгосрочные (Priority 3)
-1. Автоэволюция
-2. Мета-обучение
-3. Кросс-пользовательское обучение
-
----
-
-## Критическая оценка
-
-### Что СИЛЬНОЕ
-- ✅ Правильная архитектура (domain-driven)
-- ✅ Epistemic model (BeliefState)
-- ✅ Artifact-based execution
-- ✅ NOW: AGI components (Experience, World Model, Strategy)
-
-### Что нужно исправить
-- ⏳ 52 скрытых коммита (в легаси-коде)
-- ⏳ 13 прямых присвоений статуса
-- ⏳ God Object (GoalExecutor — теперь есть сервисы)
-
-### AGI-оценка
-| Компонент | До | После |
-|-----------|----|------|
-| Goal-driven | 7/10 | 7/10 |
-| Belief state | 8/10 | 8/10 |
-| Experience | 2/10 | 7/10 ✅ |
-| World model | 1/10 | 6/10 ✅ |
-| Strategy | 2/10 | 7/10 ✅ |
-| **ИТОГ** | **4/10** | **7/10** |
-
----
-
-## Файлы
-
-### Новые файлы
-```
-services/core/domain/
-├── services/
-│   ├── goal_creation_service.py
-│   ├── goal_execution_service.py
-│   ├── goal_evaluation_service.py
-│   ├── goal_orchestrator.py
-│   └── __init__.py
-└── SERVICES_ARCHITECTURE.md
-
-services/core/agi/
-├── experience_service.py
-├── world_model.py
-├── strategy_evolution.py
-└── __init__.py
-
-Документы:
-├── ENTITY_LEVEL_ANALYSIS.md
-├── ENTITY_MAP_VISUAL.txt
-├── AGI_ARCHITECTURE_DEPLOYED.md
-├── AGI_QUICKSTART.md
-└── SESSION_SUMMARY.md
-```
-
----
-
-## Итог
-
-**Сделано:** Архитектура AGI-системы готова
-
-**Осталось:**
-1. База данных (таблицы)
-2. Интеграция (API endpoints)
-3. Тестирование
-4. Данные (нужен опыт для обучения)
-
-**Система сейчас:**
-- На границе между "Task OS" и "Autonomous Intelligence"
-- Инфраструктура для AGI есть
-- Нужны данные и тюнинг
-
-**Главное изменение:**
-Раньше: Просто выполнение целей
-Теперь: Выполнение + ОБУЧЕНИЕ + ПРЕДСКАЗАНИЕ + УЛУЧШЕНИЕ
-
-Это уже **не просто task manager**.
-
----
-
-**Статус:** ✅ Ready for integration
-**Следующая фаза:** Database + API + Testing
+## Relevant Files
+- `execution_dynamics/kernel.py` — passes `ctx.execution_id` to `GoalExecutorV2(_execution_id=...)`.
+- `execution_dynamics/journal.py` — `JournalEntry` with hash chain fields.
+- `execution_dynamics/integrity.py` — `IntegrityVerifier` (4 checks), `IntegrityReport`, `IntegrityError`.
+- `epistemic_kernel/__init__.py` — `export_state()`, `restore_state()`, `recover()`, `update_attractor()` journals.
+- `epistemic_factory.py` — `Lock()` → `RLock()` fix.
+- `goal_executor_v2.py` — accepts `_execution_id`, calls bridge on success/failure.
+- `causal_bridge/bridge.py` — `on_execution_completed()`, `on_execution_failed()`, synchronous with `DualPropagator`.
+- `tests/unit/test_epistemic_recovery.py` — 15 tests.
+- `tests/unit/test_epistemic_recovery_adversarial.py` — 18 tests.
+- `tests/unit/test_deterministic_replay.py` — 18 tests.
+- `tests/unit/test_integrity_verifier.py` — 22 tests (hash chain, sequence, causal links, lifecycle, report).

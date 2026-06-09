@@ -6,7 +6,112 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI-OS is a sophisticated goal-execution system powered by AI agents, built with FastAPI (backend) and React (dashboard). The system decomposes high-level goals into atomic subgoals, executes them through specialized agents, and produces verifiable artifacts.
 
-**Current Status**: Production system with v3.0 goal system, v1 artifact layer, and v1 skill manifests fully operational.
+**Current Status**: Production system with v3.0 goal system, v1 artifact layer, and v1 skill manifests fully operational. Cognitive OS layer (Phases 25-40) complete. Execution Kernel correctness proven (K1–K7) — single-writer deterministic execution engine with formally bounded correctness domain. Epistemic Kernel specification defined (v0.1 draft) — belief provenance, interpretation epochs, semantic replay, and re-grounding model.
+
+---
+
+## Execution Kernel: Verified Architectural Boundary (2026-06-06)
+
+**K1–K7 complete**: 169 tests proving correctness boundaries of the execution kernel.
+
+### Proven Properties
+
+| Stage | Domain | Status |
+|-------|--------|--------|
+| K1 | Journal correctness (persistence, recovery invariance) | ✅ |
+| K2 | Stateful execution correctness (dispatch/complete/fail/cancel/expire/snapshot/recover) | ✅ |
+| K3 | Crash recovery correctness (F1–F8 + prefix property + append/truncate cycle) | ✅ |
+| K4 | Corruption safety (segment, snapshot, manifest, random byte fuzzer, recovery soundness) | ✅ |
+| K5 | Ownership correctness (single ownership, deterministic execution_id, valid lease transitions) | ✅ |
+| K6 | Cross-instance interference (interleaved writes, interleaved recovery, adversarial stress) | ✅ |
+| K7 | Single-writer enforcement (fcntl.flock, acquire/release/close cycle, stress) | ✅ |
+
+### Architectural Boundary (final form)
+
+```
+Execution Kernel
+    = deterministic state machine
+    + append-only journal
+    + replay-based recovery
+    + single-writer consistency boundary
+```
+
+#### Consistency boundary vs storage boundary
+
+A critical distinction revealed by K6–K7:
+
+| Boundary | Component | Role |
+|----------|-----------|------|
+| **Consistency boundary** | Kernel | Defines correctness of history |
+| **Storage boundary** | WAL | Stores history |
+
+- WAL is a **storage mechanism** — it stores entries.
+- Kernel is the **consistency mechanism** — it determines what constitutes a correct history.
+- Replay restores state.
+- Lock guarantees a single author of history.
+
+**Before K6**, these boundaries were conflated — it was unclear where consistency actually lived.
+
+**After K6–K7**, the answer is formal:
+
+> WAL ≠ consistency boundary. Kernel ≠ WAL.
+>
+> WAL is not multi-writer-safe by design. Hash chain, sequence, and LSN are per-writer local. Global consistency exists only within one writer lifecycle. A second writer is prevented by technical enforcement (`fcntl.flock`), not by distributed ordering.
+
+#### What IS guaranteed
+
+With a single WAL owner (enforced via `fcntl.flock` on `.wal_lock`):
+
+- Journal is the source of truth.
+- Replay is deterministic.
+- Snapshot is transparent relative to journal.
+- Recovery is idempotent.
+- Ownership is unique per goal.
+- `execution_id` is deterministic.
+- Corruption is detected (not silently ignored).
+- Crash leads to prefix loss at worst — not arbitrary state.
+- A second writer cannot enter the system when `enforce_single_writer=True`.
+
+#### What is NOT guaranteed
+
+The kernel does **not** provide:
+- Distributed consensus.
+- Multi-writer ordering.
+- Conflict resolution.
+- Replicated execution.
+- Cluster coordination.
+
+#### Why this matters
+
+- **K6** proved a negative result: with two independent writers, the journal ceases to be a correct global history.
+- **K7** translated that result into a contract: the system does not try to solve the multi-writer problem — it forbids its occurrence.
+
+#### The K5→K7 cycle
+
+| Phase | What happened |
+|-------|--------------|
+| Pre-K5 | Single writer was an implicit assumption |
+| K5–K6 | Assumption tested and experimentally falsified for multi-writer |
+| K7 | Boundary formalized + enforced (`fcntl.flock` on `.wal_lock`) |
+
+This is the complete cycle: assumption → verification → boundary formalization → technical enforcement.
+
+`enforce_single_writer` defaults to `False` for test compatibility; production deployments must set `True`.
+
+#### Summary
+
+> Execution Kernel correctness is proven only inside a single-writer WAL domain. The system is intentionally not a distributed execution engine. Cross-writer execution is prevented by lock acquisition (K7) rather than resolved through distributed ordering. Future distributed execution would require a new consistency model and should be treated as a separate architectural evolution, not an extension of the current kernel guarantees.
+
+### Next Phase: Operational Reliability
+
+After K1–K7, focus shifts from *kernel correctness* to *operational reliability*:
+
+- Stale lock recovery / lock lease takeover
+- Process supervision with lock-aware restart
+- Snapshot compaction lifecycle
+- Long-term WAL retention and archival
+- Temporal queries on journal history
+- Observability and metrics
 
 ---
 
@@ -1931,3 +2036,663 @@ tests/validation/
 | qwen2.5-coder:latest | LOCAL | ~1.5s | Primary |
 | deepseek-v3.1:671b-cloud | CLOUD | ~1-2s | Reasoning backup |
 | minimax-m2:cloud | CLOUD | ~0.5s | Light fallback |
+
+---
+
+## Cognitive OS Layer (2026-05-17)
+
+**Status**: ✅ IMPLEMENTED - Full cognitive architecture operational
+
+### Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| Emotional Layer | `services/core/emotional_layer.py` | Emotional state management + influence |
+| Growth Layer | `ai_os/cognitive_os/growth_layer/growth.py` | Meta-cognition, bias detection |
+| Strategy Evolution | `ai_os/cognitive_os/growth_layer/strategy_evolution.py` | Self-improvement through mutation |
+| Self-Narrative | `ai_os/cognitive_os/growth_layer/self_narrative.py` | Identity continuity + motivation |
+| World Model | `ai_os/cognitive_os/world_model/model.py` | Environment simulation |
+| Cognitive OS | `ai_os/cognitive_os/cognitive_os.py` | Main orchestrator facade |
+
+### Architecture
+
+```
+User Input
+    ↓
+Context Builder
+    ↓
+Cognitive OS (orchestrator)
+    ├── Emotional Layer ──→ Influence modifiers
+    ├── Growth Layer ─────→ Bias detection + meta-cognition
+    ├── Strategy Evolution ─→ Self-improvement
+    ├── World Model ───────→ Environment simulation
+    └── Self-Narrative ───→ Identity + motivation
+    ↓
+Agent Orchestration
+    ↓
+Execution
+```
+
+### Integration Points
+
+1. **agent_graph.py:141-172** - Emotional layer integrated in supervisor
+2. **main.py:8291-8459** - Cognitive OS API endpoints
+
+### API Endpoints
+
+```
+GET  /cognitive/state              # Full cognitive state
+POST /cognitive/process            # Process with full cognition
+GET  /cognitive/bias-report        # Growth layer bias report
+GET  /cognitive/identity           # Self-narrative identity
+GET  /cognitive/strategies         # Strategy recommendations
+GET  /cognitive/world              # World model state
+POST /cognitive/evolve            # Run evolution cycle
+POST /cognitive/record-outcome    # Record strategy outcome
+GET  /cognitive/motivation/{type} # Motivational response
+```
+
+### Usage
+
+```python
+from ai_os.cognitive_os import cognitive_os, CognitiveRequest
+
+# Process with cognitive support
+result = await cognitive_os.process(
+    CognitiveRequest(
+        user_id="user123",
+        context={"task": "write_code", "complexity": 0.6},
+        action="execute_goal"
+    )
+)
+
+# Get comprehensive state
+state = cognitive_os.get_state()
+```
+
+### Detected Biases (Growth Layer)
+
+- confirmation_bias - Seeking confirming evidence
+- anchoring - Relying on first information
+- overconfidence - Overestimating abilities
+- recency_bias - Giving too much weight to recent events
+- sunk_cost - Continuing based on past investment
+- availability_heuristic - Judging by easily recalled examples
+
+### Strategy Types (Strategy Evolution)
+
+- sequential_execution - Focus on single goal
+- parallel_decomposition - Decompose + execute in parallel
+- conservative_approach - Safe, proven path
+- aggressive_exploration - Novel approaches, higher risk
+
+---
+
+## Phase 8: Unified Policy + Simulation Core (2026-05-17)
+
+**Status**: ✅ IMPLEMENTED - Model-based agent system complete
+
+### Architecture Shift
+
+**Before:**
+```
+CognitiveOS → рекомендации → внешний агент решает
+```
+
+**After:**
+```
+World + Self + Emotion → UnifiedState → Policy(state) → Action
+                                                ↓
+                                    SimulationPlanner
+                                                ↓
+                                         Best Action
+```
+
+### New Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| StateBuilder | `ai_os/cognitive_os/policy/state_builder.py` | Unified latent state |
+| PolicyLayer | `ai_os/cognitive_os/policy/policy_layer.py` | policy(state) → action |
+| SimulationPlanner | `ai_os/cognitive_os/simulation/planner.py` | Simulate, evaluate, select |
+| UnifiedAgent | `ai_os/cognitive_os/policy/unified_agent.py` | Single entry point |
+
+### Unification Pipeline
+
+```
+1. StateBuilder.build_state()
+   ├── World Model → world_entities_count, capability_score
+   ├── Self-Narrative → identity_coherence, emotion
+   ├── Emotional Layer → arousal, valence, focus, confidence
+   ├── Growth Layer → bias_count, bias_awareness
+   └── Strategy Evolution → top_strategy_score
+   
+   = UnifiedState (with derived: stress, exploration, readiness)
+   
+2. PolicyLayer.decide()
+   ├── Generate candidates from state
+   ├── Score with rule-based heuristics
+   └── Return best action with alternatives
+   
+3. SimulationPlanner (optional)
+   ├── Simulate N rollouts
+   ├── Evaluate expected utility/risk
+   └── Adjust scores based on simulation
+   
+4. UnifiedAgent
+   ├── decide() → make decision
+   ├── execute_and_learn() → close learning loop
+   └── plan_sequence() → multi-step planning
+```
+
+### Action Types (PolicyLayer)
+
+- EXECUTE - Execute with best strategy
+- DECOMPOSE - Break into subgoals
+- EXPLORE - Explore new approaches
+- WAIT - Wait for better conditions
+- RECONSIDER - Re-evaluate with bias awareness
+- RETRY - Try alternative approach
+- ABORT - Abort current path
+
+### API Endpoints (Phase 8)
+
+```
+GET  /agent/state/unified       # Get unified latent state
+POST /agent/decide              # Make decision with policy
+POST /agent/execute-and-learn   # Close learning loop
+POST /agent/plan-sequence       # Multi-step planning
+GET  /agent/stats               # Agent performance stats
+GET  /agent/policy/stats        # Policy layer stats
+```
+
+### Usage
+
+```python
+from ai_os.cognitive_os import cognitive_os, get_unified_agent, AgentContext
+
+# Get unified agent
+agent = get_unified_agent(cognitive_os)
+
+# Make decision
+decision = await agent.decide(
+    AgentContext(
+        user_id="user123",
+        task="write_code",
+        complexity=0.6,
+        urgency=0.5,
+        novelty=0.3
+    ),
+    use_simulation=True
+)
+
+# Execute and learn
+await agent.execute_and_learn(decision, outcome="success")
+
+# Or plan sequence
+plan = await agent.plan_sequence(context, num_actions=3)
+```
+
+### Key Innovation
+
+**Single unified state** combines:
+- Objective signals (world model)
+- Identity signals (self-narrative)
+- Affective signals (emotional layer)
+- Meta-cognitive signals (growth layer)
+- Strategic signals (strategy evolution)
+
+**Policy layer** turns this complex state into a single action with confidence and alternatives.
+
+---
+
+## Phase 9: Observability Layer (2026-05-17)
+
+**Status**: ✅ IMPLEMENTED - Complete behavioral telemetry
+
+### Architecture
+
+```
+Decision → DecisionTracer → Full trace with context
+                ↓
+StateDiffEngine → State changes over time
+                ↓
+PolicyAttribution → Why features → action
+                ↓
+Full Report → Research-grade observability
+```
+
+### Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| DecisionTracer | `observability/decision_trace.py` | Decision traces + behavioral telemetry |
+| StateDiffEngine | `observability/state_diff.py` | State history + change patterns |
+| PolicyAttributionSystem | `observability/attribution.py` | Causal attribution graph |
+
+### API Endpoints (Phase 9)
+
+```
+# Decision Traces
+GET  /observability/traces              # List traces with filters
+GET  /observability/traces/{id}         # Detailed trace
+GET  /observability/stats               # Decision statistics
+POST /observability/trace/start         # Start new trace
+POST /observability/trace/{id}/end       # End trace
+
+# State Diffs
+GET  /observability/state/diffs          # Recent state changes
+GET  /observability/state/current        # Current state snapshot
+GET  /observability/state/patterns      # Pattern analysis
+
+# Policy Attribution
+GET  /observability/attribution/{id}      # Full attribution report
+GET  /observability/attribution/last     # Last decision explanation
+GET  /observability/attribution/importance # Feature importance
+
+# Combined
+GET  /observability/report               # Full observability report
+```
+
+### Integration
+
+All observability components integrated into UnifiedAgent:
+- DecisionTracer - records every decision with full context
+- StateDiffEngine - tracks state changes over time
+- PolicyAttributionSystem - explains why features led to action
+
+### Usage
+
+```python
+from ai_os.cognitive_os import cognitive_os, get_unified_agent
+
+agent = get_unified_agent(cognitive_os)
+
+# Decisions are automatically traced
+decision = await agent.decide(context)
+
+# Get explanations
+explanation = agent.tracer.explain_decision(decision.id)
+patterns = agent.diff_engine.analyze_patterns()
+attribution = agent.attribution_system.get_report(decision.id)
+
+# Full report
+report = agent.diff_engine.get_state_report()
+```
+
+### What This Enables
+
+1. **Decision Debugging** - Why did the system make this choice?
+2. **Pattern Detection** - What's happening to state over time?
+3. **Attribution Analysis** - Which features drove the decision?
+4. **Behavioral Telemetry** - Full audit trail for research
+5. **DecisionTransaction** - First-class atomic construct with causal timeline
+
+### DecisionTransaction Architecture
+
+**Core concept**: Everything hangs off one unified construct:
+
+```python
+DecisionTransaction
+├── state_snapshot (t0)      # UnifiedState before decision
+├── reasoning_events          # Ordered causal chain of events
+├── candidates                # All candidate evaluations
+├── attribution               # Causal feature attribution
+├── final_action             # Selected action with confidence
+└── outcome (t+1)           # Result after execution
+```
+
+### Key Features
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Transaction boundary | Multiple independent streams | Single atomic construct |
+| Causal alignment | Snapshot at each step | Full causal timeline |
+| Attribution | Post-hoc static | Incremental causal graph |
+| Replay | Not possible | Exact rerun possible |
+| RL data | Inconsistent | Dataset-quality clean |
+
+### API Endpoints (Transaction)
+
+```
+GET  /observability/transactions              # List transactions
+GET  /observability/transactions/{id}         # Full transaction detail
+GET  /observability/transactions/{id}/causal-chain  # Causal chain
+POST /observability/transaction/execute      # Execute in transaction
+POST /observability/transaction/{id}/record-outcome  # Record outcome
+GET  /observability/transactions/stats       # Transaction stats
+GET  /observability/replay-dataset           # Dataset for RL
+```
+
+### Usage (Transaction-based)
+
+```python
+agent = get_unified_agent(cognitive_os)
+
+async with agent.transaction(user_id, task) as txn:
+    await txn.decide(context, use_simulation=True)
+    # Outcome recorded automatically on exit
+
+# Transaction now complete with full causal graph
+txn = txn.get_transaction()
+chain = txn.get_causal_chain()
+```
+
+---
+
+## Phase 10: Event Ontology (2026-05-17)
+
+**Status**: ✅ IMPLEMENTED - Единый источник истины
+
+### Architecture
+
+**Before:** 3 разрозненные системы
+- DecisionTracer
+- DecisionTransaction
+- IncrementalAttribution
+
+**After:** Единый EventOntology
+
+```
+UnifiedAgent
+    ↓
+EventOntology.emit() → EventStream
+    ↓
+DecisionTransaction (Semantic wrapper)
+    ↓
+StateSnapshot + ReasoningEvents + Attribution + Outcome
+    ↓
+Full causal graph в одном месте
+```
+
+### Event Schema
+
+```python
+Event {
+    id: str
+    event_type: str  # STRICTly typed from EventType enum
+    category: str     # LIFECYCLE, STATE, CANDIDATE, SIMULATION, ATTRIBUTION, OUTCOME
+    timestamp: datetime
+    transaction_id: str
+    causal_parents: List[CausalLink]  # Parent events with relationships
+    state_delta: Optional[StateDelta]
+    decision_context: Optional[DecisionContext]
+    data: Dict[str, Any]
+    sequence: int
+    depth: int
+}
+```
+
+### Event Categories
+
+| Category | Events | Description |
+|----------|--------|-------------|
+| LIFECYCLE | transaction_start, commit, rollback | Transaction lifecycle |
+| STATE | state_snapshot, state_delta, state_query | State changes |
+| CANDIDATE | candidate_generated, scored, selected, rejected | Decision candidates |
+| SIMULATION | simulation_started, branch, completed | Simulation events |
+| ATTRIBUTION | attribution_begin, edge_added, completed | Attribution graph |
+| OUTCOME | outcome_recorded, learning_integrated | Results |
+
+### Causal Links
+
+Каждое событие содержит `causal_parents` - ссылки на родительские события:
+- `caused_by` - прямое влияние
+- `enabled` - обеспечило возможность
+- `preceded` - шло перед
+- `parallel` - параллельное
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| Event | `eventsourcing/event_ontology.py` | Единый примитив событий |
+| EventStream | `eventsourcing/event_ontology.py` | Поток событий транзакции |
+| EventOntology | `eventsourcing/event_ontology.py` | Глобальный registry |
+| EventSourcedAgent | `eventsourcing/event_sourced_agent.py` | Agent с event sourcing |
+
+### API Endpoints (Phase 10)
+
+```
+GET  /observability/events              # Query events
+GET  /observability/events/statistics   # Event statistics
+GET  /observability/events/{id}         # Event detail
+GET  /observability/streams              # List event streams
+GET  /observability/streams/{id}/graph   # Causal graph
+POST /observability/agent/execute-with-events  # Execute with event sourcing
+GET  /observability/agent/stats         # Agent statistics
+```
+
+### Usage
+
+```python
+from ai_os.cognitive_os.eventsourcing import get_event_ontology, get_event_sourced_agent
+
+# Emit events directly
+ontology = get_event_ontology()
+event = ontology.emit(
+    transaction_id="tx123",
+    event_type="candidate_selected",
+    data={"action": "execute", "confidence": 0.8}
+)
+
+# Event-Sourced Agent
+agent = get_event_sourced_agent(cognitive_os)
+async with agent.transaction(user_id, task) as txn:
+    await txn.decide(context)
+    await txn.record_outcome("success")
+
+result = txn.get_result()
+causal_graph = txn.get_causal_graph()
+```
+
+### What This Enables
+
+1. **Canonical source of truth** - Transaction is truth, everything else is projections
+2. **Causal graph (not linear logs)** - DAG of decisions with counterfactual branches
+3. **Dataset-quality logs** - Clean state → action → outcome for RL
+4. **Safe learning loop** - Phase 10 learning can be added without fragmentation
+5. **Event replay** - Exact rerun possible for debugging
+
+### System Classification
+
+This is no longer just a "cognitive architecture".
+
+**You have implemented:**
+- Deterministic decision pipeline
+- Event-sourced reasoning model
+- RL-ready trajectory system
+- Replayable agent execution layer
+
+**This is closer to:**
+- OpenAI-style trace systems
+- DeepMind trajectory logging
+- Distributed event-sourced actor model
+
+than a typical agent framework.
+
+---
+
+## Phase 11: Latent Causal Dynamics (2026-05-18)
+
+**Status**: ✅ IMPLEMENTED - Semantic causality layer
+
+### Architecture Shift
+
+**Before:** Syntactic causality (Event → Event → Event)
+**After:** Semantic causality (Latent Causes → Causal Attribution → Counterfactual)
+
+```
+Event Stream
+    ↓
+Latent State Evolution
+    ↓
+Semantic Cause Extraction
+    ↓
+Counterfactual Model
+    ↓
+World Dynamics Learning
+```
+
+### New Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| LatentStateSpace | `latent_dynamics/latent_space.py` | Embedding-based state representation |
+| CausalAttributionEngine | `latent_dynamics/causal_engine.py` | Semantic cause extraction |
+| SemanticCompressor | `latent_dynamics/semantic_compression.py` | Macro-events, trajectory chunks |
+| LatentDynamicsEngine | `latent_dynamics/engine.py` | Main orchestrator |
+
+### Key Capabilities
+
+**1. Latent State Space**
+- Embedding-based representation (not raw symbolic)
+- Distance metrics (Euclidean, cosine)
+- State interpolation for counterfactuals
+- Transition model for prediction
+
+**2. Causal Attribution Engine**
+- Detects latent causes: uncertainty_spike, prediction_conflict, reward_expectation_drop, etc.
+- Builds causal graph with semantic edges
+- Tracks causal strength and confidence
+
+**3. Semantic Compression**
+- Events → BehaviorMotifs → TrajectoryChunks
+- Prevents log explosion
+- Creates actionable units
+
+**4. Counterfactual Reasoner**
+- "What if we chose different action?"
+- Branch outcome prediction
+- Compare actual vs alternative trajectories
+
+### API Endpoints (Phase 11)
+
+```
+POST /cognitive/latent/transition          # Process with semantic causality
+GET  /cognitive/latent/causes             # Get dominant causes
+GET  /cognitive/latent/causes/unreliable   # Get low-confidence causes
+GET  /cognitive/latent/confidence/distribution  # Causal edge confidence
+POST /cognitive/latent/counterfactual      # What if analysis
+POST /cognitive/latent/branches            # Predict all branches
+GET  /cognitive/latent/states/similar      # Find similar states
+GET  /cognitive/latent/evolution           # State trajectory
+POST /cognitive/latent/compress            # Compress event stream
+GET  /cognitive/latent/stats              # Full statistics
+```
+
+### What This Enables
+
+1. **Semantic Causality** - NOT just "event after event", but "why state changed"
+2. **Latent Representation** - State as dense vector, not symbolic dict
+3. **Counterfactual Reasoning** - What would happen with different action?
+4. **Causal Confidence** - How confident are we in each causal edge?
+5. **World Dynamics Learning** - Foundation for model-based RL
+
+### Known Latent Cause Types
+
+| Cause Type | Indicators | Description |
+|------------|------------|-------------|
+| uncertainty_spike | confidence_drop, novelty_increase | Increased uncertainty |
+| prediction_conflict | high_prediction_error, surprise | Reality differs from prediction |
+| reward_expectation_drop | valence_decrease, confidence_drop | Expected reward decreased |
+| capability_assessment_update | confidence_change, action_readiness_change | Self-assessment changed |
+| stress_accumulation | stress_increase, focus_decrease | System pressure rising |
+| strategy_failure | outcome_failure, confidence_drop | Previous strategy failed |
+| novel_context | novelty_increase, task_novelty | Encountered new situation |
+| reflection_triggered | reflection_depth_increase, bias_awareness_increase | Deep self-analysis |
+
+---
+
+## Persistence Layer: Kernel Migration (2026-06-01)
+
+**Status**: ACTIVE — Dual-mode with legacy rollback path
+
+### Architecture
+
+```
+ExecutionKernel
+    ↓
+DispatchJournal (owns hash-chain, causal linking)
+    ↓
+[PRIMARY] SegmentedWAL   |   [LEGACY] WriteAheadLog
+    ↓
+SnapshotManager (materialized snapshots)
+    ↓
+DispatchJournal.boot(snapshot_mgr) → BootResult
+```
+
+### Migration State
+
+| Component | Status | Path |
+|-----------|--------|------|
+| SegmentedWAL | ✅ TESTED (38 tests) | `execution_dynamics/segmented_wal.py` |
+| SnapshotManager | ✅ TESTED (20 tests) | `execution_dynamics/snapshot.py` |
+| DispatchJournal.boot() | ✅ TESTED (7 tests) | `execution_dynamics/journal.py:308` |
+| IntegrityVerifier | ✅ TESTED (22 tests) | `execution_dynamics/integrity.py` |
+| JsonLinesWAL | ✅ STABLE (21 tests) | `execution_dynamics/jsonl_wal.py` |
+| ExecutionKernel.recover() → boot() | ✅ WIRED | `kernel.py:1808` |
+| ExecutionKernel.snapshot() → create_snapshot() | ✅ WIRED | `kernel.py:1723-1731` |
+| WAL Compaction (prune_segments) | ✅ TESTED (8 tests) | `segmented_wal.py` |
+| BootResult metrics (P2.10) | ✅ INTEGRATED | `kernel.py:1809-1817` |
+| WriteAheadLog (legacy) | 🟡 FROZEN | `execution_dynamics/wal.py` |
+| Legacy snapshot API | 🟡 FROZEN | `execution_dynamics/snapshot.py:259-283` |
+
+### Policy
+
+```
+PRIMARY (SegmentedWAL + SnapshotManager + boot()):
+    - ALL new development
+    - ALL new features
+    - ALL production use once activated
+
+LEGACY (WriteAheadLog + legacy snapshots):
+    - FROZEN — no new features
+    - Bug fixes only if migration is blocked
+    - Exists as rollback path during validation
+    - Removal deferred until production validation criteria are met
+```
+
+### Activation
+
+The new persistence layer activates when `ExecutionConfig.wal_path` is set:
+```python
+ExecutionConfig(wal_path="/path/to/wal", snapshot_path="/path/to/snapshots")
+```
+
+Default `_global_kernel` uses legacy path (`config.wal_path = ""`, no args).
+
+To switch permanently, set `_global_kernel` in `execution_dynamics/__init__.py`:
+```python
+_global_kernel = _ExecutionKernel(
+    config=ExecutionConfig(wal_path=".aios/wal", snapshot_path=".aios/snapshots")
+)
+```
+
+### Pre-Removal Validation Criteria
+
+Legacy code will be removed ONLY when ALL of the following are met:
+
+1. **Duration**: New persistence layer has been in production use for ≥2 weeks
+2. **Recovery**: ≥10 successful `boot()` recoveries (crash or controlled restart)
+3. **Corruption**: ≥1 verified recovery from corrupted WAL (truncated/missing lines)
+4. **Snapshot cycle**: ≥1 snapshot → compaction → recovery → integrity verification cycle
+5. **Multi-cycle**: ≥3 compaction cycles with no data loss (replay returns identical entries before/after)
+6. **Version upgrade**: Recovery after data format change (if applicable)
+
+### Test Coverage (167 tests total)
+
+```
+tests/unit/
+├── test_segmented_wal.py        — 38 tests (append, rotation, replay, crash, compaction)
+├── test_snapshot.py             — 20 tests (create, validate, restore, boot, metrics)
+├── test_jsonl_wal.py            — 21 tests (basic persistence)
+├── test_integrity_verifier.py   — 22 tests (hash chain, lifecycle, sequence, causal)
+├── test_deterministic_replay.py — 18 tests (determinism invariants)
+├── test_epistemic_recovery.py   — 15 tests (epistemic kernel mirror)
+├── test_epistemic_recovery_adversarial.py — 18 tests (adversarial scenarios)
+tests/fault_injection/
+├── test_prefix_recovery.py      — 4 tests (P3.1)
+├── test_replay_determinism.py   — 4 tests (P3.2)
+└── test_adversarial_lifecycle.py— 7 tests (P3.3)
+```

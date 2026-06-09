@@ -1,0 +1,13 @@
+{
+  "event_id": "0e47a86e",
+  "event_type": "skill_selected",
+  "execution_id": "exec-001",
+  "parent_event_id": "1cc3e17d",
+  "data": {
+    "skill": "core.echo",
+    "score": 0.8
+  },
+  "timestamp": "2026-05-10T07:14:23.419597",
+  "sequence": 4,
+  "event_hash": "70a3d8405159bd18"
+}

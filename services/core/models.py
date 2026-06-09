@@ -141,6 +141,10 @@ class Goal(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    last_activity_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Goal state — computed, not stored (see GoalStateCalculator)
+    # States: ACTIVE, MOVING, STALLED, BLOCKED, COMPLETED, ABANDONED
 
     # Week 3: Execution Trace
     execution_trace = Column(JSON, nullable=True)
@@ -1645,3 +1649,144 @@ class GoalStatusTransition(Base):
 
     # Relationship
     goal = relationship("Goal", backref=backref("status_transitions", cascade="all, delete-orphan"))
+
+
+# =============================================================================
+# EXECUTION KERNEL — Dispatch Journal & Lease Persistence
+# =============================================================================
+
+class ExecutionLease(Base):
+    """
+    Persistent execution lease — kernel-issued authority token.
+
+    Every execution requires a valid lease.
+    Leases survive restart for crash recovery.
+    """
+    __tablename__ = "execution_leases"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lease_id = Column(String(64), unique=True, nullable=False, index=True)
+    goal_id = Column(String(64), nullable=False, index=True)
+    execution_id = Column(String(64), nullable=False)
+    dispatch_epoch = Column(Integer, nullable=False, default=0)
+    group_id = Column(String(64), nullable=True)
+
+    state = Column(String(32), nullable=False, default="active")  # active, completed, expired, revoked, abandoned
+    issued_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    issued_by = Column(String(64), default="execution_kernel")
+
+    # Relationships
+    journal_entries = relationship("DispatchJournalEntry", back_populates="lease",
+                                    cascade="all, delete-orphan")
+
+
+class DispatchJournalEntry(Base):
+    """
+    Immutable dispatch journal entry — causal chain of execution events.
+
+    Append-only. Once written, never modified.
+    Enables replay, causal analysis, audit.
+    """
+    __tablename__ = "dispatch_journal"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entry_id = Column(String(128), unique=True, nullable=False, index=True)
+    event = Column(String(32), nullable=False)  # DISPATCHED, LEASE_ISSUED, STARTED, COMPLETED, FAILED, PREEMPTED, RETRIED, ABANDONED, CANCELLED, LEASE_EXPIRED, LEASE_REVOKED
+    goal_id = Column(String(64), nullable=False, index=True)
+    execution_id = Column(String(64), nullable=False)
+    lease_id = Column(String(64), ForeignKey("execution_leases.lease_id"), nullable=False, index=True)
+
+    # Causal context
+    dispatch_epoch = Column(Integer, nullable=False, default=0)
+    group_id = Column(String(64), nullable=True)
+    prev_entry_id = Column(String(128), nullable=True)
+
+    # Decision snapshot
+    pressure_snapshot = Column(JSONB, nullable=True)
+    execution_score = Column(Float, default=0.0)
+    field_snapshot = Column(JSONB, nullable=True)
+
+    # Outcome
+    success = Column(Boolean, nullable=True)
+    duration_ms = Column(Float, default=0.0)
+    error = Column(Text, nullable=True)
+
+    # Timestamp
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Relationship
+    lease = relationship("ExecutionLease", back_populates="journal_entries")
+
+
+class ExecutionWal(Base):
+    """
+    Write-Ahead Log — durable, append-only record of all execution events.
+
+    This is the SOURCE OF TRUTH for execution history.
+    Every journal entry is first written here.
+    On recovery, the WAL is replayed to reconstruct in-memory state.
+
+    LSN (Log Sequence Number) format: YYYYMMDD-HHMMSS-NNNNN
+    LSN is monotonic and globally ordered.
+    """
+    __tablename__ = "execution_wal"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lsn = Column(String(64), unique=True, nullable=False, index=True)
+    entry_type = Column(String(32), nullable=False)
+    entry_id = Column(String(128), nullable=False)
+
+    # Full payload as JSONB (self-contained, no joins needed for replay)
+    payload = Column(JSONB, nullable=False)
+
+    # Timestamp (redundant with payload, but indexed for range queries)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Index for ordered replay
+    __table_args__ = (
+        Index('ix_execution_wal_lsn', 'lsn'),
+    )
+
+
+class TruthJournalEntry(Base):
+    """
+    Truth Journal — append-only log of proposed and committed truth mutations.
+
+    Unlike the dispatch journal (which records execution lifecycle),
+    the truth journal records STATE MUTATIONS:
+      - goal.status transitions
+      - goal field updates (progress, trace, evaluation)
+      - artifact creation
+      - GoalExecution records
+      - skill_stats updates
+
+    Executors PROPOSE mutations. The kernel COMMITS them.
+    This separation ensures the kernel is the sole authority for truth.
+    """
+    __tablename__ = "truth_journal"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entry_id = Column(String(128), nullable=False, unique=True, index=True)
+    execution_id = Column(String(128), nullable=False, index=True)
+    lease_id = Column(String(128), nullable=False)
+    goal_id = Column(String(128), nullable=False, index=True)
+
+    mutation_type = Column(String(64), nullable=False)  # status_transition | goal_update | artifact_create
+    entity_type = Column(String(64), nullable=False)    # goal | artifact | execution | skill_stats
+    entity_id = Column(String(128), nullable=False)
+    field = Column(String(128), nullable=False)
+
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+
+    state = Column(String(32), nullable=False, default='proposed', index=True)
+    metadata = Column(JSONB, nullable=True)
+
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    error = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index('ix_truth_journal_execution', 'execution_id', 'state'),
+        Index('ix_truth_journal_goal', 'goal_id', 'state'),
+    )

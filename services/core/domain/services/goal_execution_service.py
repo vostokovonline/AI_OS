@@ -190,20 +190,17 @@ class GoalExecutionService:
         Returns:
             ExecutionResult with artifacts and evidence
         """
-        if self._atomic_executor is None:
-            from goal_executor_v2 import GoalExecutorV2
-            self._atomic_executor = GoalExecutorV2()
-
         logger.debug(
             "executing_atomic_goal",
             goal_id=str(goal.id),
             title=goal.title
         )
 
-        # Execute via V2 (atomic executor)
-        outcome = await self._atomic_executor.execute_goal(
+        # Execute through kernel (lease + journal + dynamics)
+        from execution_dynamics import dispatch_goal
+        outcome = await dispatch_goal(
             goal_id=str(goal.id),
-            session_id=session_id
+            dispatch_id=f"exec_svc:{goal.id}",
         )
 
         # Extract artifacts from outcome

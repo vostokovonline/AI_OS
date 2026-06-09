@@ -1,0 +1,19 @@
+{
+  "intent_id": "0552fadd",
+  "execution_id": "exec-debug-001",
+  "parent_goal": "Test goal",
+  "desired_outcome": "success",
+  "success_criteria": {},
+  "risk_budget": 0.5,
+  "latency_budget_ms": 30000,
+  "token_budget": 10000,
+  "allowed_capabilities": [
+    "*"
+  ],
+  "forbidden_capabilities": [],
+  "autonomy_level": "autonomous",
+  "requires_approval_for": [],
+  "rollback_strategy": null,
+  "rollback_trigger": null,
+  "created_at": "2026-05-10T07:43:34.820590"
+}

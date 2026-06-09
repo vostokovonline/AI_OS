@@ -1,0 +1,35 @@
+{
+  "contract_id": "9ba7ff9b",
+  "skill_id": "core.write_file",
+  "tool_signature": "1fc79f9f7ae71dd3",
+  "capability_constraints": {
+    "filesystem.read": true,
+    "filesystem.write": true,
+    "network.http": true,
+    "network.ws": false,
+    "subprocess.execute": false,
+    "memory.mutate": false,
+    "self.modify": false,
+    "human.override": true
+  },
+  "expected_side_effects": [],
+  "allowed_outputs": [
+    "text",
+    "json",
+    "artifact"
+  ],
+  "deterministic_flags": {
+    "idempotent": false,
+    "pure": false,
+    "side_effect_free": false,
+    "deterministic_output": true
+  },
+  "max_retries": 3,
+  "timeout_ms": 30000,
+  "resource_limits": {
+    "memory_mb": 512,
+    "cpu_percent": 50
+  },
+  "created_at": "2026-05-10T07:06:19.657033",
+  "version": "v1"
+}

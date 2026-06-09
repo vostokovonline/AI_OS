@@ -1,0 +1,15 @@
+{
+  "event_id": "1cc3e17d",
+  "event_type": "candidate_scored",
+  "execution_id": "exec-001",
+  "parent_event_id": null,
+  "data": {
+    "candidates": [
+      "echo",
+      "write"
+    ]
+  },
+  "timestamp": "2026-05-10T07:14:23.418257",
+  "sequence": 3,
+  "event_hash": "c90690b95c6a6113"
+}

@@ -18,7 +18,7 @@ export type NodeStatus = 'pending' | 'active' | 'done' | 'blocked' | 'failed';
 
 export type Mode = 'explore' | 'exploit' | 'reflect';
 export type OverlayType = 'none' | 'heatmap' | 'conflicts' | 'memory_traces' | 'simulation';
-export type ViewType = 'graph' | 'gantt' | 'tree' | 'observability' | 'questions' | 'decomposition' | 'skills' | 'deployments' | 'occp-observability' | 'federation' | 'artifacts' | 'autonomy' | 'admin' | 'decision' | 'llm-analytics' | 'system-health' | 'performance' | 'unified-chat' | 'llm-control' | 'control-center' | 'evolution' | 'goals' | 'plan-memory' | 'trace-timeline' | 'capabilities';
+export type ViewType = 'graph' | 'gantt' | 'tree' | 'observability' | 'questions' | 'decomposition' | 'skills' | 'deployments' | 'occp-observability' | 'federation' | 'artifacts' | 'autonomy' | 'admin' | 'decision' | 'vfield' | 'llm-analytics' | 'system-health' | 'performance' | 'unified-chat' | 'llm-control' | 'control-center' | 'evolution' | 'goals' | 'plan-memory' | 'trace-timeline' | 'capabilities';
 
 // ============================================================================
 // GOAL NODE

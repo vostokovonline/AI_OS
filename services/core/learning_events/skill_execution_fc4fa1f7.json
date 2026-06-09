@@ -1,0 +1,28 @@
+{
+  "event_type": "skill_execution",
+  "trace_id": "",
+  "event_id": "fc4fa1f7",
+  "timestamp": "2026-05-08T10:18:16.453166",
+  "context_features": {
+    "goal_type": "achievable"
+  },
+  "goal_type": "achievable",
+  "domain": "",
+  "candidates": [
+    "core.echo",
+    "core.write_file"
+  ],
+  "executed_arm": "core.echo",
+  "shadow_arm": "core.echo",
+  "reward": 0.8,
+  "success": true,
+  "latency_ms": 150,
+  "error": null,
+  "regret": 0.018,
+  "policy_version": "thompson_v1",
+  "schema_version": "v3",
+  "reward_success": 1.0,
+  "reward_latency": -0.005,
+  "reward_quality": 0.0,
+  "reward_penalty": 0.0
+}

@@ -15,7 +15,7 @@ router = APIRouter(prefix="/goals", tags=["goals"])
 
 @router.post("/create")
 async def create_goal_endpoint(req: dict):
-    """Создает новую цель"""
+    """Создает новую цель и выполняет через Execution Kernel"""
     from goal_executor import goal_executor
     
     try:
@@ -30,9 +30,14 @@ async def create_goal_endpoint(req: dict):
         )
         
         if req.get("auto_execute", True):
-            from tasks import execute_goal_task
-            execute_goal_task.delay(goal_id, None)
-            return {"status": "created_and_started", "goal_id": goal_id}
+            from execution_dynamics import dispatch_goal
+            ex_result = await dispatch_goal(goal_id=goal_id)
+            return {
+                "status": "created_and_started",
+                "goal_id": goal_id,
+                "execution_id": ex_result.execution_id,
+                "success": ex_result.success,
+            }
         
         return {"status": "created", "goal_id": goal_id}
     except Exception as e:
@@ -41,17 +46,27 @@ async def create_goal_endpoint(req: dict):
 
 @router.post("/execute")
 async def execute_goal_endpoint(req: dict):
-    """Выполняет существующую цель через Orchestrator (V1)"""
-    from goal_executor import goal_executor
-    
+    """Выполняет существующую цель через Execution Kernel — sole execution authority"""
+    from execution_dynamics import dispatch_goal
+
     goal_id = req.get("goal_id")
-    session_id = req.get("session_id")
-    
-    # API doesn't make architectural decisions
-    # Orchestrator (V1) handles atomic vs complex internally
-    result = await goal_executor.execute_goal(goal_id, session_id)
-    
-    return result
+    if not goal_id:
+        return {"status": "error", "message": "goal_id is required"}
+
+    ex_result = await dispatch_goal(goal_id=goal_id)
+
+    return {
+        'success': ex_result.success,
+        'goal_id': ex_result.goal_id,
+        'artifacts': ex_result.artifacts,
+        'error': ex_result.error,
+        'execution_id': ex_result.execution_id,
+        'lease_id': ex_result.lease_id,
+        'dispatch_epoch': ex_result.dispatch_epoch,
+        'execution_pressure': ex_result.execution_pressure,
+        'duration_ms': ex_result.duration_ms,
+        'did_skip': ex_result.did_skip,
+    }
 
 
 @router.get("/list")

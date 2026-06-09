@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from uuid import UUID
 from datetime import datetime
 
+from application.execution.outcomes import ExecutionOutcome
+
 if TYPE_CHECKING:
     from infrastructure.uow import UnitOfWork
 
@@ -185,10 +187,26 @@ class ExecuteReadyGoalsUseCase:
                         # Goal disappeared between selection and execution
                         continue
 
-                    # Execute with pure function
-                    outcome = await self._executor.execute_goal(
+                    # Execute through kernel (lease + journal + dynamics)
+                    from execution_dynamics import dispatch_goal
+                    dispatch_result = await dispatch_goal(
                         goal_id=str(goal_id),
-                        uow=read_uow  # Read-only access
+                        uow=read_uow,
+                    )
+
+                    # Convert dispatch result → pure outcome
+                    outcome_success = dispatch_result.get('success', False)
+                    outcome = ExecutionOutcome(
+                        status="completed" if outcome_success else "failed",
+                        confidence=1.0 if outcome_success else 0.0,
+                        attempts=1,
+                        artifacts=dispatch_result.get('artifacts', []),
+                        error=dispatch_result.get('error'),
+                        execution_trace={
+                            'execution_id': dispatch_result.get('execution_id', ''),
+                            'lease_id': dispatch_result.get('lease_id', ''),
+                            'did_skip': dispatch_result.get('did_skip', False),
+                        },
                     )
 
                     # Convert outcome → intent (with optimistic lock)

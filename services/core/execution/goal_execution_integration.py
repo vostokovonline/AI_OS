@@ -426,12 +426,21 @@ class OrchestratedGoalExecutor:
                     "trace_id": trace_id
                 }
 
-            # Step 3: Execute goal using GoalExecutorV2
+            # Step 3: Execute goal through kernel
             async with self._uow_provider() as uow:
-                result = await self.goal_executor.execute_goal(
+                from execution_dynamics import dispatch_goal
+                _dispatch_result = await dispatch_goal(
                     goal_id=goal_id,
                     uow=uow,
-                    session_id=session_id
+                    dispatch_id=f"integ:{goal_id}",
+                )
+                # Wrap in ExecutionOutcome for downstream compatibility
+                result = ExecutionOutcome(
+                    status="completed" if _dispatch_result.get('success') else "failed",
+                    confidence=1.0 if _dispatch_result.get('success') else 0.0,
+                    attempts=1,
+                    artifacts=_dispatch_result.get('artifacts', []),
+                    error=_dispatch_result.get('error'),
                 )
 
             # Step 4: Complete execution (transition to EXECUTED)

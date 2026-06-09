@@ -1,0 +1,13 @@
+{
+  "node_id": "832c11ab",
+  "execution_id": "exec-001",
+  "node_type": "decomposed_goal",
+  "parent_node_id": null,
+  "edge_type": null,
+  "planner_id": null,
+  "decomposition_depth": 0,
+  "created_at": "2026-05-10T07:05:54.400294",
+  "status": "pending",
+  "outgoing_edges": [],
+  "incoming_edges": []
+}

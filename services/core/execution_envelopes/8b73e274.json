@@ -1,0 +1,20 @@
+{
+  "trace_id": "1453a436",
+  "execution_id": "8b73e274",
+  "policy_version": "legacy_v1",
+  "selected_skill_id": "core.echo",
+  "shadow_skill_id": null,
+  "candidate_skill_ids": [
+    "core.echo"
+  ],
+  "context_features": {
+    "goal_id": "test",
+    "input_keys": [
+      "text"
+    ]
+  },
+  "context_hash": "60590e6bebcae6fb",
+  "created_at": "2026-05-09T22:18:14.600296",
+  "goal_type": "achievable",
+  "domain": "general"
+}

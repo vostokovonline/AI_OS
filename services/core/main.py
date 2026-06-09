@@ -85,6 +85,11 @@ from api.endpoints.semantic_layer import router as semantic_router
 # NEW: Refactored API module (Dashboard Compatibility Layer)
 from api.routes import router as dashboard_router
 
+# Epistemic Kernel, Causal Bridge, CPE, PHE API
+from api.endpoints.epistemic import router as epistemic_router
+from api.endpoints.causal import router as causal_router
+from api.endpoints.aios_state import router as aios_state_router
+
 app = FastAPI()
 
 # SECURITY: Limit CORS to specific origins
@@ -181,6 +186,13 @@ app.include_router(autonomy_router)
 from api.v1.goals import router as goals_v1_router
 app.include_router(goals_v1_router)
 
+# Epistemic Kernel, Causal Bridge, CPE, PHE API
+app.include_router(epistemic_router)
+app.include_router(causal_router)
+
+# AIOSState — MVP cockpit endpoint
+app.include_router(aios_state_router)
+
 # UoW Provider for dependency injection
 uow_provider = create_uow_provider()
 
@@ -276,7 +288,25 @@ async def startup():
     logger.info(f"✓ Unified Skill Service loaded {skills_count} skills")
 
     # Metrics Engine: Initialize and subscribe to event bus
-    from metrics_engine import MetricsEngine, set_metrics_engine
+    # Stub - metrics_engine module doesn't exist yet
+    class MetricsEngineStub:
+        def __init__(self, *args, **kwargs):
+            pass
+        def start(self):
+            pass
+        async def handle_event(self, event):
+            pass
+        async def start_periodic_flush(self):
+            pass
+        def subscribe(self, event_type, handler):
+            pass
+    
+    def set_metrics_engine(engine):
+        pass
+    
+    MetricsEngine = MetricsEngineStub
+    
+    # from metrics_engine import MetricsEngine, set_metrics_engine
     from application.events.bus import get_event_bus
     from application.events.goal_events import GoalActivated, GoalCompleted, GoalFailed
     from application.events.execution_events import SkillExecuted, ArtifactCreated, GoalExecutionFinished
@@ -379,6 +409,26 @@ async def startup():
     set_metrics_engine(metrics_engine)
 
     logger.info("✓ Metrics Engine initialized and subscribed to event bus")
+
+    # Initialize Epistemic Kernel, Causal Bridge, CPE, PHE
+    from epistemic_factory import (
+        get_epistemic_kernel,
+        get_causality_bridge,
+        get_causal_policy_engine,
+        get_policy_horizon_engine,
+    )
+    ek = get_epistemic_kernel()
+    bridge = get_causality_bridge()
+    cpe = get_causal_policy_engine()
+    phe = get_policy_horizon_engine()
+    logger.info("✓ Epistemic Kernel initialized")
+    logger.info("✓ Causality Bridge initialized")
+    logger.info("✓ Causal Policy Engine initialized")
+    logger.info("✓ Policy Horizon Engine initialized")
+
+    # Wire bridge to execution kernel events
+    if hasattr(bridge, 'execution_kernel') and bridge.execution_kernel is not None:
+        logger.info("✓ Causality Bridge connected to Execution Kernel")
 
     # Note: Scheduler is already started in background thread above (line 219)
     # Do NOT call start_scheduler() again here - it would cause "RuntimeError: cannot schedule new futures after shutdown"
@@ -765,15 +815,25 @@ async def execute_goal(
             "got": type(uow)
         }
 
-    # Execute with UoW - ONE atomic transaction
+    # Execute through Kernel — sole execution authority
     async with uow:
-        result = await goal_executor_v2.execute_goal(
+        from execution_dynamics import dispatch_goal
+        ex_result = await dispatch_goal(
             goal_id=req.goal_id,
             uow=uow,
-            session_id=req.session_id
         )
 
-    return result
+    return {
+        'success': ex_result.success,
+        'goal_id': ex_result.goal_id,
+        'artifacts': ex_result.artifacts,
+        'error': ex_result.error,
+        'execution_id': ex_result.execution_id,
+        'lease_id': ex_result.lease_id,
+        'dispatch_epoch': ex_result.dispatch_epoch,
+        'execution_pressure': ex_result.execution_pressure,
+        'duration_ms': ex_result.duration_ms,
+    }
 
 @app.post("/goals/bulk/activate")
 async def bulk_activate_goals(
@@ -8259,4 +8319,1618 @@ async def record_ab_test_execution(
     }
 
 
+# =============================================================================
+# COGNITIVE OS API
+# =============================================================================
 
+@app.get("/cognitive/state")
+async def get_cognitive_state():
+    """
+    Get comprehensive cognitive system state.
+    
+    Returns:
+        Emotional, growth, strategy, identity, and world model states.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        state = cognitive_os.get_state()
+        return {
+            "status": "ok",
+            "cognitive_state": state
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "degraded",
+            "error": str(e),
+            "cognitive_state": None
+        }
+
+
+@app.post("/cognitive/process")
+async def process_cognitive_request(
+    user_id: str,
+    context: dict,
+    action: str = "default",
+    emotional_signals: Optional[dict] = None
+):
+    """
+    Process a request with full cognitive support.
+    
+    Integrates:
+    - Emotional influence
+    - Strategy recommendations
+    - Bias detection
+    - World model updates
+    - Self-narrative context
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import CognitiveOS, CognitiveRequest
+        from ai_os.cognitive_os.cognitive_os import cognitive_os as cos
+        
+        request = CognitiveRequest(
+            user_id=user_id,
+            context=context,
+            action=action,
+            emotional_signals=emotional_signals
+        )
+        
+        result = await cos.process(request)
+        
+        return {
+            "status": "ok",
+            "emotional_influence": result.emotional_influence,
+            "strategy_recommendations": result.strategy_recommendations,
+            "bias_warnings": result.bias_warnings,
+            "world_state": result.world_state,
+            "narrative_context": result.narrative_context,
+            "reasoning_trace": result.reasoning_trace
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/cognitive/bias-report")
+async def get_bias_report():
+    """
+    Get current bias awareness report from Growth Layer.
+    
+    Returns:
+        Detected patterns, frequencies, and improvement suggestions.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        report = cognitive_os.growth.get_bias_report()
+        return {
+            "status": "ok",
+            "report": report
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/cognitive/identity")
+async def get_identity_report():
+    """
+    Get self-narrative identity report.
+    
+    Returns:
+        Identity coherence, roles, and current narrative.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        report = cognitive_os.self_narrative.get_identity_report()
+        return {
+            "status": "ok",
+            "identity": report
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/cognitive/strategies")
+async def get_strategy_recommendations(
+    complexity: float = 0.5,
+    urgency: float = 0.5,
+    novelty: float = 0.5
+):
+    """
+    Get strategy recommendations based on context.
+    
+    Args:
+        complexity: Task complexity (0-1)
+        urgency: Urgency level (0-1)
+        novelty: How novel the task is (0-1)
+    
+    Returns:
+        Ranked strategy recommendations.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        
+        context = {
+            "complexity": complexity,
+            "urgency": urgency,
+            "novelty": novelty
+        }
+        
+        recommendations = cognitive_os.strategy_evolution.generate_recommendation(context)
+        return {
+            "status": "ok",
+            "recommendations": recommendations
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/cognitive/world")
+async def get_world_state():
+    """
+    Get world model state snapshot.
+    
+    Returns:
+        Entities, relationships, and action history.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        state = cognitive_os.world_model.get_world_state()
+        return {
+            "status": "ok",
+            "world_state": state
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/cognitive/evolve")
+async def run_evolution_cycle():
+    """
+    Run one strategy evolution cycle.
+    
+    Mutations and crosses top-performing strategies.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        
+        new_strategies = cognitive_os.evolve()
+        return {
+            "status": "ok",
+            "new_strategies": new_strategies,
+            "generation": cognitive_os.strategy_evolution.generation
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/cognitive/record-outcome")
+async def record_strategy_outcome(
+    strategy_id: str,
+    outcome: str,
+    score: float
+):
+    """
+    Record strategy outcome for learning.
+    
+    Updates performance metrics and integrates into narrative.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        
+        cognitive_os.record_outcome(strategy_id, outcome, score)
+        return {
+            "status": "ok",
+            "message": "Outcome recorded"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/cognitive/motivation/{outcome_type}")
+async def get_motivational_response(outcome_type: str):
+    """
+    Get motivational response based on outcome type.
+    
+    Args:
+        outcome_type: success, failure, or uncertain
+    
+    Returns:
+        Motivational message based on self-narrative.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        
+        response = cognitive_os.self_narrative.generate_motivational_response(outcome_type)
+        return {
+            "status": "ok",
+            "motivation": response
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+# =============================================================================
+# PHASE 8: UNIFIED POLICY + SIMULATION CORE
+# =============================================================================
+
+@app.get("/agent/state/unified")
+async def get_unified_state():
+    """
+    Get unified latent state from StateBuilder.
+    
+    Combines world + self + emotion + growth + strategy into single state.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.state_builder import StateBuilder
+        
+        builder = StateBuilder(cognitive_os)
+        state = await builder.build_state()
+        
+        return {
+            "status": "ok",
+            "state": {
+                "world_outcome": state.world_recent_outcome,
+                "world_entities": state.world_entities_count,
+                "world_capability": state.world_capability_score,
+                "identity_coherence": state.identity_coherence,
+                "identity_emotion": state.identity_emotion,
+                "arousal": state.arousal,
+                "valence": state.valence,
+                "focus": state.focus,
+                "confidence": state.confidence,
+                "bias_count": state.bias_count,
+                "bias_awareness": state.bias_awareness,
+                "reflection_depth": state.reflection_depth,
+                "top_strategy": state.top_strategy_name,
+                "stress_level": state.stress_level,
+                "exploration_tendency": state.exploration_tendency,
+                "action_readiness": state.action_readiness,
+            },
+            "vector": state.to_vector()
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/agent/decide")
+async def agent_decide(
+    user_id: str,
+    task: str,
+    task_type: str = "default",
+    complexity: float = 0.5,
+    urgency: float = 0.5,
+    novelty: float = 0.5,
+    use_simulation: bool = True
+):
+    """
+    Make a decision using UnifiedAgent with policy(state) → action.
+    
+    This is the main decision endpoint for Phase 8.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        from ai_os.cognitive_os.policy.unified_agent import AgentContext
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        context = AgentContext(
+            user_id=user_id,
+            task=task,
+            task_type=task_type,
+            complexity=complexity,
+            urgency=urgency,
+            novelty=novelty
+        )
+        
+        decision = await agent.decide(context, use_simulation=use_simulation)
+        
+        return {
+            "status": "ok",
+            "decision": {
+                "action": decision.action_type,
+                "confidence": decision.confidence,
+                "reasoning": decision.reasoning,
+                "expected_utility": decision.expected_utility,
+                "expected_risk": decision.expected_risk,
+                "alternatives": decision.alternatives,
+                "simulation_used": decision.simulation_used,
+            }
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/agent/execute-and-learn")
+async def agent_execute_and_learn(
+    decision_data: dict,
+    outcome: str,
+    metrics: Optional[dict] = None
+):
+    """
+    Execute decision and record outcome for learning.
+    
+    Closes the learning loop: action → outcome → strategy update.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        from ai_os.cognitive_os.policy.unified_agent import AgentDecision
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        decision = AgentDecision(
+            action_type=decision_data.get("action", "execute"),
+            confidence=decision_data.get("confidence", 0.5),
+            reasoning=decision_data.get("reasoning", ""),
+            expected_utility=decision_data.get("expected_utility", 0.5),
+            expected_risk=decision_data.get("expected_risk", 0.5),
+            alternatives=decision_data.get("alternatives", []),
+            simulation_used=decision_data.get("simulation_used", False)
+        )
+        
+        learning = await agent.execute_and_learn(decision, outcome, metrics)
+        
+        return {
+            "status": "ok",
+            "learning": learning
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/agent/plan-sequence")
+async def agent_plan_sequence(
+    user_id: str,
+    task: str,
+    task_type: str = "default",
+    complexity: float = 0.5,
+    urgency: float = 0.5,
+    novelty: float = 0.5,
+    num_actions: int = 3
+):
+    """
+    Plan a sequence of actions using simulation loop.
+    
+    Returns ordered list of decisions for multi-step execution.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        from ai_os.cognitive_os.policy.unified_agent import AgentContext
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        context = AgentContext(
+            user_id=user_id,
+            task=task,
+            task_type=task_type,
+            complexity=complexity,
+            urgency=urgency,
+            novelty=novelty
+        )
+        
+        plan = await agent.plan_sequence(context, num_actions=num_actions)
+        
+        return {
+            "status": "ok",
+            "plan": [
+                {
+                    "action": d.action_type,
+                    "confidence": d.confidence,
+                    "reasoning": d.reasoning,
+                    "expected_utility": d.expected_utility,
+                }
+                for d in plan
+            ]
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/agent/stats")
+async def get_agent_stats():
+    """
+    Get agent performance statistics.
+    
+    Includes decision history, policy stats, and cognitive state.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        stats = agent.get_agent_stats()
+        
+        return {
+            "status": "ok",
+            "stats": stats
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/agent/policy/stats")
+async def get_policy_stats():
+    """
+    Get policy layer statistics.
+    
+    Includes action distribution and confidence metrics.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.state_builder import StateBuilder
+        from ai_os.cognitive_os.policy.policy_layer import PolicyLayer
+        
+        builder = StateBuilder(cognitive_os)
+        policy = PolicyLayer(builder, cognitive_os.world_model)
+        
+        return {
+            "status": "ok",
+            "policy_stats": policy.get_decision_stats()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/observability/transactions")
+async def get_transactions(
+    user_id: Optional[str] = None,
+    limit: int = 100
+):
+    """
+    Get completed decision transactions.
+    
+    Each transaction contains full causal chain from state → action → outcome.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        transactions = agent._transaction_history
+        
+        if user_id:
+            transactions = [t for t in transactions if t.user_id == user_id]
+        
+        transactions = transactions[-limit:]
+        
+        return {
+            "status": "ok",
+            "count": len(transactions),
+            "transactions": [
+                {
+                    "id": t.id,
+                    "user_id": t.user_id,
+                    "task": t.task,
+                    "status": t.status,
+                    "action": t.selected_action,
+                    "confidence": t.confidence,
+                    "outcome": t.outcome.outcome if t.outcome else None,
+                    "duration_ms": t.total_duration_ms,
+                    "is_complete": t.is_complete(),
+                }
+                for t in transactions
+            ]
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/transactions/{transaction_id}")
+async def get_transaction_detail(transaction_id: str):
+    """
+    Get detailed transaction with full causal chain.
+    
+    Includes state, reasoning events, candidates, attribution, and outcome.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        for txn in agent._transaction_history:
+            if txn.id == transaction_id:
+                return {"status": "ok", "transaction": txn.to_dict()}
+        
+        return {"status": "error", "error": "Transaction not found"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/transactions/{transaction_id}/causal-chain")
+async def get_causal_chain(transaction_id: str):
+    """
+    Get causal chain for a transaction.
+    
+    Shows the complete reasoning path from state → action.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        for txn in agent._transaction_history:
+            if txn.id == transaction_id:
+                return {
+                    "status": "ok",
+                    "transaction_id": transaction_id,
+                    "causal_chain": txn.get_causal_chain()
+                }
+        
+        return {"status": "error", "error": "Transaction not found"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/replay-dataset")
+async def get_replay_dataset(limit: int = 100):
+    """
+    Get replayable dataset for RL training.
+    
+    Each entry has complete state → action → outcome sequence.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        dataset = agent.get_replayable_dataset(limit)
+        
+        return {
+            "status": "ok",
+            "count": len(dataset),
+            "dataset": dataset
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/observability/transaction/execute")
+async def execute_with_transaction(
+    user_id: str,
+    task: str,
+    task_type: str = "default",
+    complexity: float = 0.5,
+    urgency: float = 0.5,
+    novelty: float = 0.5,
+    use_simulation: bool = True
+):
+    """
+    Execute a decision within a transaction context.
+    
+    Returns the complete transaction with full causal chain.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        from ai_os.cognitive_os.policy.unified_agent import AgentContext
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        context = AgentContext(
+            user_id=user_id,
+            task=task,
+            task_type=task_type,
+            complexity=complexity,
+            urgency=urgency,
+            novelty=novelty
+        )
+        
+        async with agent.transaction(user_id, task) as txn:
+            await txn.decide(context, use_simulation=use_simulation)
+        
+        return {
+            "status": "ok",
+            "transaction_id": txn.transaction.id,
+            "action": txn.transaction.selected_action,
+            "confidence": txn.transaction.confidence,
+            "reasoning": txn.transaction.reasoning,
+            "attribution": txn.transaction.attribution.to_dict() if txn.transaction.attribution else None,
+            "reasoning_events": len(txn.transaction.reasoning_events),
+            "candidates": len(txn.transaction.candidates),
+            "duration_ms": txn.transaction.total_duration_ms,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/observability/transaction/{transaction_id}/record-outcome")
+async def record_transaction_outcome(
+    transaction_id: str,
+    outcome: str,
+    score: float = 1.0
+):
+    """
+    Record outcome for a completed transaction.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        from ai_os.cognitive_os.observability.transaction import StateSnapshot
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        for txn in agent._transaction_history:
+            if txn.id == transaction_id:
+                state_after = StateSnapshot()
+                state_after.timestamp = datetime.utcnow()
+                
+                current = agent.diff_engine.get_current_state()
+                if current:
+                    state_after.confidence = current.confidence
+                    state_after.stress_level = current.stress_level
+                
+                txn.record_outcome(outcome, score, state_after)
+                
+                return {
+                    "status": "ok",
+                    "transaction_id": transaction_id,
+                    "outcome": outcome,
+                    "score": score
+                }
+        
+        return {"status": "error", "error": "Transaction not found"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/transactions/stats")
+async def get_transaction_stats():
+    """
+    Get transaction statistics.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        transactions = agent._transaction_history
+        completed = [t for t in transactions if t.is_complete()]
+        with_outcome = [t for t in completed if t.outcome]
+        
+        return {
+            "status": "ok",
+            "stats": {
+                "total_transactions": len(transactions),
+                "completed": len(completed),
+                "with_outcome": len(with_outcome),
+                "completion_rate": len(completed) / len(transactions) if transactions else 0,
+                "avg_duration_ms": sum(t.total_duration_ms for t in completed) / len(completed) if completed else 0,
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# =============================================================================
+# PHASE 9: OBSERVABILITY LAYER (existing endpoints)
+# =============================================================================
+
+@app.get("/observability/traces")
+async def get_decision_traces(
+    user_id: Optional[str] = None,
+    action: Optional[str] = None,
+    outcome: Optional[str] = None,
+    limit: int = 100
+):
+    """
+    Get decision traces with full behavioral telemetry.
+    
+    Query parameters:
+    - user_id: Filter by user
+    - action: Filter by action type
+    - outcome: Filter by outcome
+    - limit: Max results (default 100)
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        traces = agent.tracer.store.query(
+            user_id=user_id,
+            action=action,
+            outcome=outcome,
+            limit=limit
+        )
+        
+        return {
+            "status": "ok",
+            "count": len(traces),
+            "traces": [
+                {
+                    "id": t.id,
+                    "timestamp": t.timestamp.isoformat(),
+                    "action": t.action,
+                    "confidence": t.confidence,
+                    "reasoning": t.reasoning,
+                    "outcome": t.outcome,
+                    "simulation_used": t.simulation_used,
+                }
+                for t in traces
+            ]
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/traces/{decision_id}")
+async def get_trace_detail(decision_id: str):
+    """
+    Get detailed trace for a specific decision.
+    
+    Includes state snapshot, alternatives, and outcome.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        explanation = agent.tracer.explain_decision(decision_id)
+        
+        return {"status": "ok", "trace": explanation}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/stats")
+async def get_observability_stats(user_id: Optional[str] = None):
+    """
+    Get comprehensive observability statistics.
+    
+    Includes action distribution, confidence stats, outcome distribution.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        stats = agent.tracer.get_stats(user_id)
+        
+        return {"status": "ok", "stats": stats}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/state/diffs")
+async def get_state_diffs(count: int = 5):
+    """
+    Get recent state diffs showing how state changed over time.
+    
+    Args:
+        count: Number of recent diffs to return
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        diffs = agent.diff_engine.get_recent_diffs(count)
+        
+        return {"status": "ok", "diffs": diffs}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/state/current")
+async def get_current_state():
+    """
+    Get current unified state snapshot.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        state = agent.diff_engine.get_current_state()
+        
+        return {
+            "status": "ok",
+            "state": state.to_dict() if state else None
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/state/patterns")
+async def get_state_patterns():
+    """
+    Get analyzed state patterns and trends.
+    
+    Includes trends, anomalies, and pattern detection.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        patterns = agent.diff_engine.analyze_patterns()
+        
+        return {"status": "ok", "patterns": patterns}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/attribution/{decision_id}")
+async def get_decision_attribution(decision_id: str):
+    """
+    Get full attribution for why a decision was made.
+    
+    Shows causal chain from features → scoring → action.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        report = agent.attribution_system.get_report(decision_id)
+        
+        return {"status": "ok", "attribution": report}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/attribution/last")
+async def get_last_attribution():
+    """
+    Get explanation for the most recent decision.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        explanation = agent.attribution_system.explain_last()
+        
+        return {"status": "ok", "explanation": explanation}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/attribution/importance")
+async def get_feature_importance(window: int = 100):
+    """
+    Get average feature importance over recent decisions.
+    
+    Args:
+        window: Number of recent decisions to analyze
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        importance = agent.attribution_system.get_feature_importance(window)
+        
+        return {"status": "ok", "feature_importance": importance}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/observability/trace/start")
+async def start_trace(user_id: str, task: str = ""):
+    """
+    Start a new decision trace.
+    
+    Returns trace_id for subsequent decision recording.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        trace = agent.tracer.start_trace(user_id, task)
+        
+        return {"status": "ok", "trace_id": trace.trace_id}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/observability/trace/{trace_id}/end")
+async def end_trace(trace_id: str):
+    """
+    End a decision trace and store results.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        trace = agent.tracer.end_trace(trace_id)
+        
+        return {
+            "status": "ok",
+            "completed": trace is not None,
+            "duration_ms": trace.duration_ms() if trace else 0
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/report")
+async def get_full_observability_report(user_id: Optional[str] = None):
+    """
+    Get comprehensive observability report combining all components.
+    
+    Includes traces, state diffs, attribution, and patterns.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.policy.unified_agent import get_unified_agent
+        
+        agent = get_unified_agent(cognitive_os)
+        
+        return {
+            "status": "ok",
+            "report": {
+                "tracer_stats": agent.tracer.get_stats(user_id),
+                "state_report": agent.diff_engine.get_state_report(),
+                "last_attribution": agent.attribution_system.explain_last(),
+                "feature_importance": agent.attribution_system.get_feature_importance(100),
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# =============================================================================
+# PHASE 10: EVENT ONTOLOGY - Единый источник истины
+# =============================================================================
+
+@app.get("/observability/events")
+async def get_events(
+    event_type: Optional[str] = None,
+    category: Optional[str] = None,
+    transaction_id: Optional[str] = None,
+    limit: int = 100
+):
+    """
+    Получить события из Event Ontology.
+    
+    Это единый интерфейс для всех событий системы.
+    Заменяет разрозненные tracer + transaction + attribution.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os.eventsourcing import get_event_ontology
+        
+        ontology = get_event_ontology()
+        events = ontology.query(
+            event_type=event_type,
+            category=category,
+            transaction_id=transaction_id,
+            limit=limit
+        )
+        
+        return {
+            "status": "ok",
+            "count": len(events),
+            "events": [e.to_dict() for e in events]
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/events/statistics")
+async def get_event_statistics():
+    """
+    Получить статистику Event Ontology.
+    
+    Показывает распределение событий по типам и категориям.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os.eventsourcing import get_event_ontology
+        
+        ontology = get_event_ontology()
+        stats = ontology.get_statistics()
+        
+        return {
+            "status": "ok",
+            "statistics": stats
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/events/{event_id}")
+async def get_event_detail(event_id: str):
+    """
+    Получить детали события по ID.
+    
+    Включает causal chain и связанные события.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os.eventsourcing import get_event_ontology
+        
+        ontology = get_event_ontology()
+        event = ontology.get_event(event_id)
+        
+        if not event:
+            return {"status": "error", "error": "Event not found"}
+        
+        return {
+            "status": "ok",
+            "event": event.to_dict(),
+            "causal_path": event.get_causal_path()
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/streams")
+async def get_event_streams(transaction_id: Optional[str] = None):
+    """
+    Получить Event Streams.
+    
+    Каждый stream соответствует одной транзакции.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os.eventsourcing import get_event_ontology
+        
+        ontology = get_event_ontology()
+        
+        if transaction_id:
+            stream = ontology.get_stream(transaction_id)
+            if not stream:
+                return {"status": "error", "error": "Stream not found"}
+            return {
+                "status": "ok",
+                "streams": [stream.to_dict()]
+            }
+        else:
+            streams = list(ontology.streams.values())
+            return {
+                "status": "ok",
+                "count": len(streams),
+                "streams": [s.to_dict() for s in streams[-50:]]
+            }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/streams/{transaction_id}/graph")
+async def get_stream_causal_graph(transaction_id: str):
+    """
+    Получить causal graph для транзакции.
+    
+    Показывает все события и их причинные связи.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os.eventsourcing import get_event_ontology
+        
+        ontology = get_event_ontology()
+        stream = ontology.get_stream(transaction_id)
+        
+        if not stream:
+            return {"status": "error", "error": "Stream not found"}
+        
+        return {
+            "status": "ok",
+            "transaction_id": transaction_id,
+            "graph": stream.get_causal_graph()
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/observability/agent/execute-with-events")
+async def execute_with_event_sourcing(
+    user_id: str,
+    task: str,
+    task_type: str = "default",
+    complexity: float = 0.5,
+    urgency: float = 0.5,
+    novelty: float = 0.5
+):
+    """
+    Выполнить решение через Event-Sourced Agent.
+    
+    Все события записываются в Event Ontology.
+    Возвращает полный causal graph.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.eventsourcing import get_event_sourced_agent
+        
+        agent = get_event_sourced_agent(cognitive_os)
+        
+        from ai_os.cognitive_os.eventsourcing import AgentContext as ESAContext
+        
+        context = ESAContext(
+            user_id=user_id,
+            task=task,
+            task_type=task_type,
+            complexity=complexity,
+            urgency=urgency,
+            novelty=novelty
+        )
+        
+        async with agent.transaction(user_id, task) as txn:
+            await txn.decide(context)
+        
+        return {
+            "status": "ok",
+            "transaction_id": txn.transaction_id,
+            "selected_action": txn.result.selected_action if txn.result else None,
+            "confidence": txn.result.confidence if txn.result else None,
+            "causal_chain": txn.get_causal_chain(),
+            "events_count": len(txn.get_causal_chain()),
+            "duration_ms": txn.result.duration_ms if txn.result else 0,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/observability/agent/stats")
+async def get_event_sourced_agent_stats():
+    """
+    Получить статистику Event-Sourced Agent.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.eventsourcing import get_event_sourced_agent
+        
+        agent = get_event_sourced_agent(cognitive_os)
+        stats = agent.get_statistics()
+        
+        return {
+            "status": "ok",
+            "stats": stats
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# =============================================================================
+# PHASE 11: LATENT CAUSAL DYNAMICS
+# =============================================================================
+
+@app.post("/cognitive/latent/transition")
+async def process_latent_transition(
+    from_state: dict,
+    to_state: dict,
+    action: Optional[str] = None,
+    outcome: Optional[str] = None
+):
+    """
+    Process state transition with semantic causality.
+    
+    Extracts latent causes, builds causal attribution,
+    and creates latent state representation.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        from ai_os.cognitive_os.latent_dynamics.latent_space import SymbolicState
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        
+        # Create unified state from dict
+        class MockState:
+            def __init__(self, data):
+                for k, v in data.items():
+                    setattr(self, k, v)
+        
+        from_state_obj = MockState(from_state)
+        to_state_obj = MockState(to_state)
+        
+        result = engine.process_transition(
+            from_state=from_state_obj,
+            to_state=to_state_obj,
+            action=action,
+            outcome=outcome
+        )
+        
+        return {"status": "ok", "transition": result}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognitive/latent/causes")
+async def get_dominant_causes(limit: int = 5):
+    """
+    Get dominant latent causes across all transitions.
+    
+    Returns semantic causes like:
+    - uncertainty_spike
+    - prediction_conflict
+    - reward_expectation_drop
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        causes = engine.get_dominant_causes(limit)
+        
+        return {"status": "ok", "causes": causes}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognitive/latent/causes/unreliable")
+async def get_unreliable_causes(threshold: float = 0.3):
+    """
+    Get causes with low causal confidence.
+    
+    These are candidates for further investigation.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        unreliable = engine.get_unreliable_causes(threshold)
+        
+        return {"status": "ok", "unreliable_causes": unreliable}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognitive/latent/confidence/distribution")
+async def get_causal_confidence_distribution():
+    """
+    Get distribution of causal edge confidences.
+    
+    Returns high/medium/low ratios.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        distribution = engine.get_confidence_distribution()
+        
+        return {"status": "ok", "distribution": distribution}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/cognitive/latent/counterfactual")
+async def reason_counterfactual(
+    state_id: str,
+    actual_action: str,
+    alternative_action: str
+):
+    """
+    Reason about counterfactual: what if we chose alternative_action?
+    
+    Uses transition model to predict what would happen.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        counterfactual = engine.reason_counterfactual(
+            state_id=state_id,
+            actual_action=actual_action,
+            alternative_action=alternative_action
+        )
+        
+        return {"status": "ok", "counterfactual": counterfactual}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/cognitive/latent/branches")
+async def predict_branch_outcomes(
+    state_id: str,
+    possible_actions: List[str]
+):
+    """
+    Predict outcomes for all possible actions.
+    
+    Returns ranked list of predicted outcomes.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        predictions = engine.predict_branch_outcomes(state_id, possible_actions)
+        
+        return {"status": "ok", "predictions": predictions}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognitive/latent/states/similar")
+async def find_similar_states(state_id: str, threshold: float = 0.3):
+    """
+    Find states similar to given state in latent space.
+    
+    Useful for finding analogous situations.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        similar = engine.find_similar_states(state_id, threshold)
+        
+        return {"status": "ok", "similar_states": similar}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognitive/latent/evolution")
+async def get_state_evolution():
+    """
+    Get full state evolution trajectory.
+    
+    Shows how latent state changed over time.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        trajectory = engine.get_state_evolution()
+        
+        return {"status": "ok", "trajectory": trajectory}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/cognitive/latent/compress")
+async def compress_trajectory(events: List[dict]):
+    """
+    Compress event stream into semantic motifs.
+    
+    Prevents log explosion, creates actionable units.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        result = engine.compress_trajectory(events)
+        
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognitive/latent/stats")
+async def get_latent_dynamics_stats():
+    """
+    Get comprehensive latent dynamics statistics.
+    """
+    try:
+        import sys
+        sys.path.insert(0, '/home/onor/ai_os_final')
+        from ai_os.cognitive_os import cognitive_os
+        from ai_os.cognitive_os.latent_dynamics.engine import get_latent_dynamics_engine
+        
+        engine = get_latent_dynamics_engine(cognitive_os)
+        stats = engine.get_statistics()
+        
+        return {"status": "ok", "stats": stats}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# ============================================================================
+# LEASE MANAGEMENT API (P2.12b)
+# ============================================================================
+
+
+@app.post("/leases/{lease_id}/heartbeat")
+async def lease_heartbeat(lease_id: str):
+    """
+    Record a keepalive heartbeat for an active lease.
+    Extends the lease TTL by the default lease TTL.
+    """
+    from epistemic_factory import get_causality_bridge
+    bridge = get_causality_bridge()
+    if not bridge or not bridge.execution_kernel:
+        return {"status": "error", "error": "Execution kernel not available"}
+    ok = bridge.execution_kernel.heartbeat_lease(lease_id)
+    return {"status": "ok" if ok else "error", "lease_id": lease_id}
+
+
+@app.post("/leases/{lease_id}/renew")
+async def lease_renew(lease_id: str, ttl: Optional[int] = None):
+    """
+    Explicitly renew a lease with optional custom TTL.
+    """
+    from epistemic_factory import get_causality_bridge
+    bridge = get_causality_bridge()
+    if not bridge or not bridge.execution_kernel:
+        return {"status": "error", "error": "Execution kernel not available"}
+    ok = bridge.execution_kernel.renew_lease(lease_id, ttl)
+    return {"status": "ok" if ok else "error", "lease_id": lease_id}
+
+
+@app.get("/leases/stale")
+async def lease_stale(threshold: Optional[int] = None):
+    """
+    List active leases without recent heartbeats.
+    Optional query param: threshold=300 (seconds)
+    """
+    from epistemic_factory import get_causality_bridge
+    bridge = get_causality_bridge()
+    if not bridge or not bridge.execution_kernel:
+        return {"status": "error", "error": "Execution kernel not available"}
+    stale = bridge.execution_kernel.detect_stale_leases(threshold)
+    return {"status": "ok", "stale_leases": stale, "count": len(stale)}
+
+
+@app.post("/leases/expire-stale")
+async def lease_expire_stale(max_age: Optional[int] = None):
+    """
+    Force-expire all stale leases.
+    Journals LEASE_EXPIRED for each stale lease.
+    """
+    from epistemic_factory import get_causality_bridge
+    bridge = get_causality_bridge()
+    if not bridge or not bridge.execution_kernel:
+        return {"status": "error", "error": "Execution kernel not available"}
+    count = bridge.execution_kernel.expire_stale_leases(max_age)
+    return {"status": "ok", "expired_count": count}

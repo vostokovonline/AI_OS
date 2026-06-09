@@ -1,0 +1,17 @@
+{
+  "event_id": "a2fed153",
+  "event_type": "candidate_scored",
+  "execution_id": "exec-chain",
+  "parent_event_id": "96a9cd5d",
+  "previous_event_hash": "56186f5eb5cdecec",
+  "chain_hash": "6f598965a8d4ac96",
+  "data": {
+    "scores": [
+      0.8,
+      0.6
+    ]
+  },
+  "timestamp": "2026-05-10T07:27:28.978386",
+  "sequence": 7,
+  "event_hash": "6f8bb63570419623"
+}

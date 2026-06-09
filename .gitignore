@@ -90,3 +90,21 @@ artifacts/
 # Submodules with their own git
 skills/.git
 services/core/skills/.git
+
+# Generated/runtime data directories
+backups/
+*.aios_demo/
+aios_runtime/
+decision_traces/
+decision_traces_invalid/
+policy_snapshots/
+registry_snapshots/
+replay_bundles/
+temporal_metrics/
+.aios/
+
+# External project artifacts
+skills/
+
+# JSONL trace files
+*.jsonl

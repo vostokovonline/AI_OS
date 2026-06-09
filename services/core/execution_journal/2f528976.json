@@ -1,0 +1,14 @@
+{
+  "event_id": "2f528976",
+  "event_type": "skill_selected",
+  "execution_id": "exec-chain",
+  "parent_event_id": "a2fed153",
+  "previous_event_hash": "6f8bb63570419623",
+  "chain_hash": "869b667a5d5780e2",
+  "data": {
+    "skill": "echo"
+  },
+  "timestamp": "2026-05-10T07:27:28.978924",
+  "sequence": 8,
+  "event_hash": "7934b304a35b48ee"
+}

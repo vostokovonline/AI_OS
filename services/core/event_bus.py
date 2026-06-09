@@ -161,14 +161,18 @@ async def trigger_execution_handler(event: Event):
 
 async def recovery_handler(event: Event):
     """
-    Handler: при stuck goal попытаться восстановить.
+    Handler: при stuck goal — восстановить через Execution Kernel.
     """
     goal_id = event.data.get("goal_id")
     if not goal_id:
         return
     
-    from goal_executor_v2 import recover_goal
-    await recover_goal(goal_id)
+    from execution_dynamics import dispatch_goal
+    try:
+        ex_result = await dispatch_goal(goal_id=goal_id)
+        logger.info(f"recovery_dispatch goal_id={goal_id} success={ex_result.success}")
+    except Exception as e:
+        logger.error(f"recovery_failed goal_id={goal_id} error={e}")
 
 
 # ============================================================

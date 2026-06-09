@@ -1,0 +1,23 @@
+{
+  "execution_id": "unified-001",
+  "selected_candidate": "core.echo",
+  "candidate_distribution": {
+    "core.echo": 0.9
+  },
+  " posterior_distribution": {
+    "core.echo": 0.9
+  },
+  "uncertainty_vector": {
+    "core.echo": 0.1
+  },
+  "exploration_coefficient": 0.1,
+  "decision_temperature": 1.0,
+  "threshold_margin": 0,
+  "active_constraints": [],
+  "suppressed_candidates": [],
+  "confidence": 0.9,
+  "selection_reason": "",
+  "rejection_reasons": {},
+  "created_at": "2026-05-10T07:37:27.337775",
+  "snapshot_hash": "a22d7af7df818226"
+}

@@ -28,6 +28,7 @@ import { Artifacts } from "./pages/Artifacts";
 import Autonomy from "./pages/Autonomy";
 import Admin from "./pages/Admin";
 import Decision from "./pages/Decision";
+import VField from "./pages/VField";
 import LLMAnalytics from "./pages/LLMAnalytics";
 import SystemHealth from "./pages/SystemHealth";
 import Performance from "./pages/Performance";
@@ -98,6 +99,9 @@ const App: React.FC = () => {
           <div className={view === 'decision' ? 'absolute inset-0 bg-gray-900 overflow-auto' : 'hidden'}>
             <Decision />
           </div>
+          <div className={view === 'vfield' ? 'absolute inset-0 bg-gray-900 overflow-auto' : 'hidden'}>
+            <VField />
+          </div>
 
           {/* New Analytics Pages - Fixed backgrounds */}
           <div className={view === 'llm-analytics' ? 'absolute inset-0 bg-gray-900 overflow-auto' : 'hidden'}>
@@ -145,6 +149,9 @@ const App: React.FC = () => {
           <div className={view === 'capabilities' ? 'absolute inset-0 bg-gray-900 overflow-auto' : 'hidden'}>
             <Capabilities />
           </div>
+          <div className={view === 'vfield' ? 'absolute inset-0 bg-gray-900 overflow-auto' : 'hidden'}>
+            <VField />
+          </div>
 
           {/* Observability Console */}
           <div className={view === 'observability' ? 'absolute inset-0 bg-gray-900 overflow-auto' : 'hidden'}>
@@ -162,7 +169,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Graph/Gantt/Tree Views */}
-          <div className={view !== 'observability' && view !== 'questions' && view !== 'decomposition' && view !== 'skills' && view !== 'deployments' && view !== 'occp-observability' && view !== 'artifacts' && view !== 'autonomy' && view !== 'admin' && view !== 'decision' && view !== 'llm-analytics' && view !== 'system-health' && view !== 'performance' && view !== 'unified-chat' && view !== 'llm-control' && view !== 'evolution' && view !== 'goals' && view !== 'control-center' && view !== 'plan-memory' && view !== 'trace-timeline' && view !== 'capabilities' ? 'absolute inset-0 flex' : 'hidden'}>
+          <div className={view !== 'observability' && view !== 'questions' && view !== 'decomposition' && view !== 'skills' && view !== 'deployments' && view !== 'occp-observability' && view !== 'artifacts' && view !== 'autonomy' && view !== 'admin' && view !== 'decision' && view !== 'vfield' && view !== 'llm-analytics' && view !== 'system-health' && view !== 'performance' && view !== 'unified-chat' && view !== 'llm-control' && view !== 'evolution' && view !== 'goals' && view !== 'control-center' && view !== 'plan-memory' && view !== 'trace-timeline' && view !== 'capabilities' ? 'absolute inset-0 flex' : 'hidden'}>
             {/* Center Canvas */}
             <div className="flex-1 flex flex-col">
               {view === 'graph' && <GraphCanvas />}

@@ -203,14 +203,21 @@ async def execute_goal_v3(goal, uow) -> Optional[Dict[str, Any]]:
             execution_engine="v3"
         )
 
-        # Execute with legacy executor (uses same uow)
-        from goal_executor_v2 import goal_executor_v2
+        # Execute through kernel (lease + journal + dynamics)
+        from execution_dynamics import dispatch_goal
 
-        result = await goal_executor_v2.execute_goal_with_uow(
-            uow=uow,
+        dispatch_result = await dispatch_goal(
             goal_id=goal_id,
-            session_id=f"v3_{goal_id}"
+            uow=uow,
+            dispatch_id=f"v3:{goal_id}",
         )
+
+        result = {
+            'success': dispatch_result.get('success', False),
+            'artifacts': dispatch_result.get('artifacts', []),
+            'error': dispatch_result.get('error'),
+            'execution_id': dispatch_result.get('execution_id', ''),
+        }
 
         # Log execution history (already done via structured logging)
         # The execution_v3_complete log already contains all needed info

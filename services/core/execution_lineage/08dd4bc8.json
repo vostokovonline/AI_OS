@@ -1,0 +1,10 @@
+{
+  "node_id": "08dd4bc8",
+  "execution_id": "goal-001",
+  "node_type": "decomposed_goal",
+  "parent_node_id": null,
+  "planner_id": "planner-v1",
+  "decomposition_depth": 0,
+  "created_at": "2026-05-09T23:08:35.090934",
+  "status": "pending"
+}

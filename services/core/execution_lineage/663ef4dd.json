@@ -1,0 +1,11 @@
+{
+  "node_id": "663ef4dd",
+  "execution_id": "test-1",
+  "node_type": "atomic_goal",
+  "parent_node_id": null,
+  "edge_type": "decomposed_into",
+  "planner_id": null,
+  "decomposition_depth": 0,
+  "created_at": "2026-05-09T23:22:49.091421",
+  "status": "pending"
+}

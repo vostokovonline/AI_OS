@@ -1,0 +1,12 @@
+{
+  "event_id": "bdb5db3c",
+  "event_type": "plan_generated",
+  "execution_id": "exec-001",
+  "parent_event_id": "83071cb7",
+  "data": {
+    "plan": "step1, step2"
+  },
+  "timestamp": "2026-05-10T07:14:23.417734",
+  "sequence": 2,
+  "event_hash": "1a5f82054fa773ee"
+}

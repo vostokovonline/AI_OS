@@ -1,0 +1,14 @@
+{
+  "event_id": "091785f6",
+  "event_type": "task_created",
+  "execution_id": "exec-commit-002",
+  "parent_event_id": null,
+  "previous_event_hash": "",
+  "chain_hash": "5f424c1d474555d5",
+  "data": {
+    "data": "test"
+  },
+  "timestamp": "2026-05-10T07:44:56.353186",
+  "sequence": 10,
+  "event_hash": "b52e11607625aae2"
+}

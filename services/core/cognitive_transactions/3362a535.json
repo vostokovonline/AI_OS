@@ -1,0 +1,18 @@
+{
+  "transaction_id": "3362a535",
+  "execution_id": "legacy-001",
+  "intent_id": "1c221440",
+  "decision_boundary_id": "",
+  "selected_skill": "",
+  "state_machine_id": "legacy-001",
+  "current_state": "created",
+  "event_chain_id": "",
+  "event_count": 0,
+  "evaluation_vector_id": null,
+  "reward": 0.0,
+  "counterfactual_id": null,
+  "temporal_metric_ids": [],
+  "created_at": "2026-05-10T07:46:28.481820",
+  "completed_at": "2026-05-10T07:46:28.482032",
+  "transaction_hash": "d715117d0cde7e31"
+}
