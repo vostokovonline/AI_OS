@@ -358,7 +358,7 @@ class TruthJournal:
                 old_value=str(entry.mutation.old_value) if entry.mutation.old_value else None,
                 new_value=str(entry.mutation.new_value) if entry.mutation.new_value else None,
                 state=entry.state,
-                metadata=entry.mutation.metadata,
+                mutation_meta=entry.mutation.metadata,
             )
             self._db.add(db_entry)
             self._db.flush()

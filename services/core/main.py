@@ -20,7 +20,6 @@ from agent_graph import app_graph
 from dna_manager import bootstrap_dna
 from emotions import analyze_sentiment
 from goal_executor import goal_executor
-from goal_executor_v2 import goal_executor_v2
 from sqlalchemy import select, text, func
 
 # Logging
@@ -85,10 +84,12 @@ from api.endpoints.semantic_layer import router as semantic_router
 # NEW: Refactored API module (Dashboard Compatibility Layer)
 from api.routes import router as dashboard_router
 
+# AIOS bounded context — zero dependency on experience/epistemic/cognitive layers
+from aios.router import router as aios_router
+
 # Epistemic Kernel, Causal Bridge, CPE, PHE API
 from api.endpoints.epistemic import router as epistemic_router
 from api.endpoints.causal import router as causal_router
-from api.endpoints.aios_state import router as aios_state_router
 
 app = FastAPI()
 
@@ -190,8 +191,8 @@ app.include_router(goals_v1_router)
 app.include_router(epistemic_router)
 app.include_router(causal_router)
 
-# AIOSState — MVP cockpit endpoint
-app.include_router(aios_state_router)
+# AIOS bounded context — MVP cockpit endpoint
+app.include_router(aios_router)
 
 # UoW Provider for dependency injection
 uow_provider = create_uow_provider()
@@ -229,7 +230,11 @@ async def wait_for_db():
 @app.on_event("startup")
 async def startup():
     await wait_for_db()
-    async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        try:
+            await conn.run_sync(Base.metadata.create_all)
+        except Exception:
+            pass  # tables already exist
     await bootstrap_dna()
     
     # Configure goal dispatcher for queue-based execution
@@ -9773,7 +9778,7 @@ async def reason_counterfactual(
 @app.post("/cognitive/latent/branches")
 async def predict_branch_outcomes(
     state_id: str,
-    possible_actions: List[str]
+    possible_actions: list[str]
 ):
     """
     Predict outcomes for all possible actions.
@@ -9837,7 +9842,7 @@ async def get_state_evolution():
 
 
 @app.post("/cognitive/latent/compress")
-async def compress_trajectory(events: List[dict]):
+async def compress_trajectory(events: list[dict]):
     """
     Compress event stream into semantic motifs.
     

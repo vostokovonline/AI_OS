@@ -1781,7 +1781,7 @@ class TruthJournalEntry(Base):
     new_value = Column(Text, nullable=True)
 
     state = Column(String(32), nullable=False, default='proposed', index=True)
-    metadata = Column(JSONB, nullable=True)
+    mutation_meta = Column(JSONB, nullable=True)
 
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     error = Column(Text, nullable=True)

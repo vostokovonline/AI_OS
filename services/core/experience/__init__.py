@@ -353,19 +353,22 @@ from experience.contradiction_memory import (
 from experience.contradiction_memory import ContradictionDetector as ContradictionMemoryDetector
 
 # Unified Epistemic State (canonical world-state)
-from experience.unified_epistemic_state import (
-    EpistemicClock,
-    BeliefState,
-    ConstraintState,
-    ContradictionState,
-    CausalEdgeState,
-    StateDiff,
-    InvariantCheck,
-    UnifiedEpistemicState,
-    UnifiedEpistemicStateManager,
-    get_ues_manager,
-    get_current_state
-)
+try:
+    from experience.unified_epistemic_state import (
+        EpistemicClock,
+        BeliefState,
+        ConstraintState,
+        ContradictionState,
+        CausalEdgeState,
+        StateDiff,
+        InvariantCheck,
+        UnifiedEpistemicState,
+        UnifiedEpistemicStateManager,
+        get_ues_manager,
+        get_current_state
+    )
+except ImportError:
+    pass
 
 # Constraint Graph (belief decomposition for proper contradiction detection)
 from experience.constraint_graph import (
@@ -393,19 +396,22 @@ from experience.contradiction_memory import (
 from experience.contradiction_memory import ContradictionDetector as ContradictionMemoryDetector
 
 # Unified Epistemic State (canonical world-state)
-from experience.unified_epistemic_state import (
-    EpistemicClock,
-    BeliefState,
-    ConstraintState,
-    ContradictionState,
-    CausalEdgeState,
-    StateDiff,
-    InvariantCheck,
-    UnifiedEpistemicState,
-    UnifiedEpistemicStateManager,
-    get_ues_manager,
-    get_current_state
-)
+try:
+    from experience.unified_epistemic_state import (
+        EpistemicClock,
+        BeliefState,
+        ConstraintState,
+        ContradictionState,
+        CausalEdgeState,
+        StateDiff,
+        InvariantCheck,
+        UnifiedEpistemicState,
+        UnifiedEpistemicStateManager,
+        get_ues_manager,
+        get_current_state
+    )
+except ImportError:
+    pass
 
 # Reflection Scheduler (budget-aware scheduling)
 from experience.reflection_scheduler import (

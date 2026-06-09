@@ -42,15 +42,26 @@ from canonical_skills.base import Skill, SkillResult, Artifact
 from canonical_skills.registry import skill_registry
 
 # Import Experience Engine for learning loop
-from experience import experience_engine
+try:
+    from experience import experience_engine
+except ImportError as e:
+    experience_engine = None
+    import logging
+    logging.getLogger(__name__).warning(f"experience_engine unavailable: {e}")
 from canonical_skills.echo import EchoSkill
 from canonical_skills.write_file import WriteFileSkill
 from evaluation_engine import evaluation_engine
 
-# Import envelope tracking
-from experience.execution_envelope import ExecutionEnvelope
-from experience.enforcement_config import get_enforcement_config, get_enforcement_metrics
-from experience.execution_adapter import ExecutionContext
+# Import envelope tracking (optional — graceful degradation)
+try:
+    from experience.execution_envelope import ExecutionEnvelope
+    from experience.enforcement_config import get_enforcement_config, get_enforcement_metrics
+    _HAS_ENVELOPE_TRACKING = True
+except ImportError:
+    ExecutionEnvelope = None
+    get_enforcement_config = lambda: {}
+    get_enforcement_metrics = lambda: {}
+    _HAS_ENVELOPE_TRACKING = False
 
 # Import LLM for content generation
 from llm_fallback import chat_with_fallback
@@ -3213,20 +3224,21 @@ class GoalExecutorV2:
 
             uow_provider = create_uow_provider()
             async with uow_provider() as uow:
-                await experience_engine.record_experience(
-                    session=uow.session,
-                    goal_id=goal_id,
-                    task_type=task_type,
-                    skill_id=skill_id,
-                    success=success,
-                    confidence=confidence,
-                    latency_ms=latency_ms,
-                    error_type=error_type,
-                    error_message=error_message,
-                    extra_metadata={
-                        "goal_title": goal_title,
-                        "goal_type": goal_type,
-                        "artifacts_produced": artifacts_count
+                if experience_engine is not None:
+                    await experience_engine.record_experience(
+                        session=uow.session,
+                        goal_id=goal_id,
+                        task_type=task_type,
+                        skill_id=skill_id,
+                        success=success,
+                        confidence=confidence,
+                        latency_ms=latency_ms,
+                        error_type=error_type,
+                        error_message=error_message,
+                        extra_metadata={
+                            "goal_title": goal_title,
+                            "goal_type": goal_type,
+                            "artifacts_produced": artifacts_count
                     }
                 )
                 logger.debug(
@@ -3484,6 +3496,8 @@ Format: Markdown"""
         return params
 
     def _track_execution_envelope(self, skill, goal_id: str, inputs: dict) -> Optional[ExecutionEnvelope]:
+        if not _HAS_ENVELOPE_TRACKING:
+            return None
         """
         Track execution through envelope. 
         

@@ -21,9 +21,7 @@ from copy import deepcopy
 import hashlib
 import json
 
-from wal_engine import WALEngine, WALEventType, get_wal_engine
-import hashlib
-import json
+from .wal_engine import WALEngine, WALEventType, get_wal_engine
 
 
 class EpistemicClock:

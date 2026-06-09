@@ -32,9 +32,11 @@ class AIOSState:
         return {
             "timestamp": self.timestamp.isoformat(),
             "summary": self._summary(),
-            "goal_states": self.goal_states,
+            "goals": self.goal_states,
             "risks": self.risks,
             "priorities": self.priorities,
+            "active_executions": {"total": 0, "items": []},
+            "recent_events": [],
         }
 
     def _summary(self):

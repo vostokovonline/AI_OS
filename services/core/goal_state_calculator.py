@@ -44,11 +44,9 @@ class GoalStateCalculator:
     ) -> GoalState:
         if is_completed:
             return GoalState.COMPLETED
-        if status in ("done", "completed"):
+        if status in ("done", "completed", "archived", "failed", "cancelled"):
             return GoalState.COMPLETED
-        if status == "failed":
-            return GoalState.ABANDONED
-        if has_blockers:
+        if has_blockers or status == "blocked":
             return GoalState.BLOCKED
         if last_activity_at is None:
             return GoalState.ACTIVE
@@ -93,6 +91,8 @@ class GoalStateCalculator:
         abandoned_days: int = ABANDONED_DAYS,
     ) -> list[dict]:
         from models import Goal
+        from sqlalchemy import select
+        result = await session.execute(select(Goal))
         goals = result.scalars().all()
 
         now = datetime.now(timezone.utc)
